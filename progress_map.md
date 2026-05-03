@@ -14,6 +14,7 @@ Status: Complete; waiting for user confirmation before Step 1.6
 - `63acdfc` - `Step 1.4 minimal block world storage` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 - `b155c44` - `Prefer Git Bash in agent instructions` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 - `ebc0d50` - `Remove hard-coded Bash path guidance` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
+- `22cd4c2` - `Step 1.5 block lifecycle and neighbor updates` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 
 ## Phase 0 - Source Research and Project Rules
 
