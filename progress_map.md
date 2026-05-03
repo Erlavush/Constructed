@@ -12,6 +12,7 @@ Status: Complete; waiting for user confirmation before Step 1.5
 
 - `c3827c9` - `Checkpoint core foundations through step 1.3` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 - `63acdfc` - `Step 1.4 minimal block world storage` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
+- `b155c44` - `Prefer Git Bash in agent instructions` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 
 ## Phase 0 - Source Research and Project Rules
 
