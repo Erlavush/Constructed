@@ -5,8 +5,8 @@ This file tracks implementation phases, approved steps, completed work, and the 
 ## Current Status
 
 Current phase: Phase 1 - Core Foundations
-Current step: Step 1.3 - Block definitions and immutable block states
-Status: Complete; waiting for user confirmation before Step 1.4
+Current step: Step 1.4 - Minimal in-memory world block storage
+Status: Complete; waiting for user confirmation before Step 1.5
 
 ## GitHub Checkpoints
 
@@ -167,6 +167,46 @@ Out of scope:
 - No concrete Minecraft/Create block catalog yet.
 - No items, recipes, rendering, scenes, placement, or gameplay machines.
 
+### Step 1.4 - Minimal In-Memory World Block Storage
+
+Status: Complete
+
+Approved scope:
+
+- Add an explicit air/default block state boundary for empty positions.
+- Add plain C# in-memory storage keyed by `BlockPos`.
+- Add `Get`, `Set`, `Remove`, occupancy checks, and stable enumeration of stored non-air states.
+- Add focused EditMode tests.
+
+Implemented files:
+
+- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
+- `Assets/Scripts/Constructed.Minecraft/WorldBlockEntry.cs`
+- `Assets/Tests/EditMode/BlockWorldTests.cs`
+
+Behavior added:
+
+- `BlockWorld` stores non-air `BlockState` values by `BlockPos` in memory.
+- Missing positions return the explicit configured air state.
+- Setting an air state removes storage for that position.
+- `SetBlockState` and `RemoveBlock` return the previous state for later lifecycle/event use.
+- `HasStoredBlock`, `StoredBlockCount`, `Clear`, and deterministic `GetStoredBlocks` enumeration support simple inspection and tests.
+- Air recognition uses the configured air block id, not object reference identity, so equivalent `minecraft:air` states clear storage.
+
+Verification:
+
+- Added focused EditMode tests for missing-position air fallback, set/get behavior, setting air as removal, explicit removal, stable stored-block ordering, id-based air recognition, and null-state rejection.
+- Initial compile-check output attempts under Unity `Temp` and `Library` were blocked by sandbox/write permissions, not by source errors.
+- `Constructed.Core` runtime assembly compiled successfully using Unity 6000.4.5f1's bundled C# compiler with outputs under `C:\Users\user\.codex\memories\ConstructedCompile`.
+- `Constructed.Minecraft` runtime assembly compiled successfully against the core compile-check assembly.
+- EditMode test source compiled successfully against the core and Minecraft compile-check assemblies plus Unity's bundled NUnit assembly.
+- Full Unity Test Runner execution was not run because active Unity processes are already attached to this project. Run the tests from the open editor's Test Runner, or close Unity and rerun batchmode.
+
+Out of scope:
+
+- No chunks, sections, neighbor updates, scheduled ticks, random ticks, or block lifecycle hooks yet.
+- No block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
+
 ## Planned Phase Outline
 
 1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
@@ -181,4 +221,4 @@ Out of scope:
 
 ## Next Proposed Step
 
-Discuss and confirm Step 1.4 before implementation. Proposed scope: minimal in-memory world block storage with an explicit air/default state and `BlockPos` get/set/remove behavior, without chunks, neighbor updates, scheduled ticks, block entities, rendering, scenes, items, recipes, or Create machines.
+Discuss and confirm Step 1.5 before implementation. Proposed scope: minimal block lifecycle callback surface and neighbor-update dispatch for `BlockWorld` set/remove operations, without chunks, scheduled ticks, random ticks, block entities, entities, rendering, scenes, items, recipes, or Create machines.
