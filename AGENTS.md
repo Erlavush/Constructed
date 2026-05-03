@@ -59,27 +59,9 @@ Relevant packages from `Packages/manifest.json` include URP 17.4.0, Input System
 
 ## Shell Preference
 
-Use Git Bash for project commands when possible instead of PowerShell.
+Use the active Bash terminal for project commands when possible instead of PowerShell.
 
-Primary Bash executable:
-
-```text
-C:\Program Files\Git\bin\bash.exe
-```
-
-Secondary Bash executable:
-
-```text
-C:\Program Files\Git\usr\bin\bash.exe
-```
-
-`bash.exe` is not currently on PATH. If the active tool shell is not already Bash, invoke Bash explicitly:
-
-```text
-C:\Program Files\Git\bin\bash.exe -lc "cd /z/Constructed && <command>"
-```
-
-When adding command examples to this file, prefer Bash syntax. Use PowerShell only when a task specifically requires PowerShell or a Windows-only command has no clean Bash equivalent.
+Do not invoke Git Bash by hard-coded executable path. Assume the session shell is already configured by the user. When adding command examples to this file, prefer normal Bash syntax. Use PowerShell only when a task specifically requires PowerShell or a Windows-only command has no clean Bash equivalent.
 
 ## Source Architecture Map
 

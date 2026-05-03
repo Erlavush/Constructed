@@ -27,7 +27,7 @@ Completed work:
 - Expanded `AGENTS.md` with researched architecture notes, Unity implementation strategy, private asset rules, testing expectations, step-by-step approval rule, and this progress map rule.
 - Added `AGENTS.md` verification guidance requiring Unity Test Framework or batchmode attempts after code changes, with a Unity-bundled compiler fallback only when full test execution is blocked.
 - Added `AGENTS.md` GitHub checkpoint guidance requiring each completed step to be committed and pushed to `https://github.com/Erlavush/Constructed.git` after verification and progress-map updates.
-- Added `AGENTS.md` shell guidance preferring Git Bash at `C:\Program Files\Git\bin\bash.exe` and converted command examples from PowerShell to Bash where practical.
+- Revised `AGENTS.md` shell guidance to use the active Bash terminal without hard-coded `bash.exe` paths.
 
 ## Phase 1 - Core Foundations
 
