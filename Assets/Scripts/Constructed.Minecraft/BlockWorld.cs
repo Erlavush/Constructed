@@ -6,6 +6,16 @@ namespace Constructed.Minecraft
 {
     public sealed class BlockWorld
     {
+        private static readonly Direction[] NeighborDirections =
+        {
+            Direction.Down,
+            Direction.Up,
+            Direction.North,
+            Direction.South,
+            Direction.West,
+            Direction.East
+        };
+
         private readonly Dictionary<BlockPos, BlockState> states;
 
         public BlockWorld(BlockState airState)
@@ -54,19 +64,25 @@ namespace Constructed.Minecraft
                 throw new ArgumentNullException(nameof(state));
 
             BlockState previous = GetBlockState(position);
-            if (IsAir(state))
+            BlockState next = IsAir(state) ? AirState : state;
+            if (previous.Equals(next))
+                return previous;
+
+            if (IsAir(next))
                 states.Remove(position);
             else
-                states[position] = state;
+                states[position] = next;
+
+            BlockStateChange change = new BlockStateChange(this, position, previous, next);
+            DispatchBlockLifecycle(change);
+            DispatchNeighborUpdates(change);
 
             return previous;
         }
 
         public BlockState RemoveBlock(BlockPos position)
         {
-            BlockState previous = GetBlockState(position);
-            states.Remove(position);
-            return previous;
+            return SetBlockState(position, AirState);
         }
 
         public void Clear()
@@ -95,6 +111,36 @@ namespace Constructed.Minecraft
                 return y;
 
             return left.Position.Z.CompareTo(right.Position.Z);
+        }
+
+        private void DispatchBlockLifecycle(BlockStateChange change)
+        {
+            if (!change.WasAir)
+                change.PreviousState.Definition.Lifecycle.OnBlockRemoved(change);
+            if (!change.IsAir)
+                change.NewState.Definition.Lifecycle.OnBlockPlaced(change);
+        }
+
+        private void DispatchNeighborUpdates(BlockStateChange change)
+        {
+            foreach (Direction directionFromChanged in NeighborDirections)
+            {
+                BlockPos neighborPosition = change.Position.Relative(directionFromChanged);
+                BlockState neighborState = GetBlockState(neighborPosition);
+                if (IsAir(neighborState))
+                    continue;
+
+                NeighborBlockChange neighborChange = new NeighborBlockChange(
+                    this,
+                    neighborPosition,
+                    neighborState,
+                    change.Position,
+                    change.PreviousState,
+                    change.NewState,
+                    directionFromChanged.Opposite());
+
+                neighborState.Definition.Lifecycle.OnNeighborChanged(neighborChange);
+            }
         }
     }
 }

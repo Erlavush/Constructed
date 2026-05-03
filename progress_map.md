@@ -5,8 +5,8 @@ This file tracks implementation phases, approved steps, completed work, and the 
 ## Current Status
 
 Current phase: Phase 1 - Core Foundations
-Current step: Step 1.4 - Minimal in-memory world block storage
-Status: Complete; waiting for user confirmation before Step 1.5
+Current step: Step 1.5 - Block lifecycle callbacks and neighbor updates
+Status: Complete; waiting for user confirmation before Step 1.6
 
 ## GitHub Checkpoints
 
@@ -211,6 +211,48 @@ Out of scope:
 - No chunks, sections, neighbor updates, scheduled ticks, random ticks, or block lifecycle hooks yet.
 - No block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
 
+### Step 1.5 - Block Lifecycle Callbacks and Neighbor Updates
+
+Status: Complete
+
+Approved scope:
+
+- Add a minimal block lifecycle callback interface attached to `BlockDefinition`.
+- Dispatch placement, removal, and replacement callbacks from `BlockWorld` set/remove operations.
+- Dispatch neighbor-update callbacks to stored non-air neighbors around changed positions.
+- Add focused EditMode tests.
+
+Implemented files:
+
+- `Assets/Scripts/Constructed.Minecraft/IBlockLifecycle.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockLifecycle.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockStateChange.cs`
+- `Assets/Scripts/Constructed.Minecraft/NeighborBlockChange.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockDefinition.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
+- `Assets/Tests/EditMode/BlockWorldLifecycleTests.cs`
+
+Behavior added:
+
+- `BlockDefinition` now owns an `IBlockLifecycle` handler, defaulting to `BlockLifecycle.None`.
+- `BlockWorld.SetBlockState` ignores no-op state writes, canonicalizes air writes to the configured air state, and dispatches callbacks after real storage changes.
+- Placement callbacks are sent to the new non-air block state.
+- Removal callbacks are sent to the previous non-air block state.
+- Replacement from one non-air state to another dispatches removal for the old state and placement for the new state.
+- Neighbor updates are sent to stored non-air blocks in the six adjacent positions, with direction and old/new changed-state context.
+
+Verification:
+
+- Added focused EditMode tests for placement callbacks, removal callbacks, replacement callbacks, no-op writes, and neighbor-update direction/context.
+- `Constructed.Core` runtime assembly compiled successfully using Unity 6000.4.5f1's bundled C# compiler with outputs under `C:\Users\user\.codex\memories\ConstructedCompile`.
+- `Constructed.Minecraft` runtime assembly compiled successfully against the core compile-check assembly.
+- EditMode test source compiled successfully against the core and Minecraft compile-check assemblies plus Unity's bundled NUnit assembly.
+- Full Unity Test Runner execution was not run because active Unity processes are already attached to this project. Run the tests from the open editor's Test Runner, or close Unity and rerun batchmode.
+
+Out of scope:
+
+- No chunks, sections, scheduled ticks, random ticks, block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
+
 ## Planned Phase Outline
 
 1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
@@ -225,4 +267,4 @@ Out of scope:
 
 ## Next Proposed Step
 
-Discuss and confirm Step 1.5 before implementation. Proposed scope: minimal block lifecycle callback surface and neighbor-update dispatch for `BlockWorld` set/remove operations, without chunks, scheduled ticks, random ticks, block entities, entities, rendering, scenes, items, recipes, or Create machines.
+Discuss and confirm Step 1.6 before implementation. Proposed scope: minimal scheduled block tick queue and deterministic execution order for `BlockWorld`, without chunks, random ticks, block entities, entities, rendering, scenes, items, recipes, or Create machines.

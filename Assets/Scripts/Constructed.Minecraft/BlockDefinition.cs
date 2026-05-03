@@ -10,18 +10,26 @@ namespace Constructed.Minecraft
         private readonly List<IStateProperty> properties;
 
         public BlockDefinition(ResourceLocation id)
-            : this(id, Array.Empty<IStateProperty>())
+            : this(id, Array.Empty<IStateProperty>(), BlockLifecycle.None)
         {
         }
 
         public BlockDefinition(ResourceLocation id, IEnumerable<IStateProperty> properties)
+            : this(id, properties, BlockLifecycle.None)
+        {
+        }
+
+        public BlockDefinition(ResourceLocation id, IEnumerable<IStateProperty> properties, IBlockLifecycle lifecycle)
         {
             if (string.IsNullOrEmpty(id.Namespace) || string.IsNullOrEmpty(id.Path))
                 throw new ArgumentException("Block id must be initialized.", nameof(id));
             if (properties == null)
                 throw new ArgumentNullException(nameof(properties));
+            if (lifecycle == null)
+                throw new ArgumentNullException(nameof(lifecycle));
 
             Id = id;
+            Lifecycle = lifecycle;
             this.properties = new List<IStateProperty>();
             propertiesByName = new Dictionary<string, IStateProperty>(StringComparer.Ordinal);
 
@@ -34,6 +42,8 @@ namespace Constructed.Minecraft
         }
 
         public ResourceLocation Id { get; }
+
+        public IBlockLifecycle Lifecycle { get; }
 
         public IReadOnlyList<IStateProperty> Properties { get; }
 
