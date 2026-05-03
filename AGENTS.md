@@ -57,6 +57,30 @@ Unity version from `ProjectSettings/ProjectVersion.txt`:
 
 Relevant packages from `Packages/manifest.json` include URP 17.4.0, Input System 1.19.0, AI Navigation 2.0.12, UGUI 2.0.0, and Unity Test Framework 1.6.0.
 
+## Shell Preference
+
+Use Git Bash for project commands when possible instead of PowerShell.
+
+Primary Bash executable:
+
+```text
+C:\Program Files\Git\bin\bash.exe
+```
+
+Secondary Bash executable:
+
+```text
+C:\Program Files\Git\usr\bin\bash.exe
+```
+
+`bash.exe` is not currently on PATH. If the active tool shell is not already Bash, invoke Bash explicitly:
+
+```text
+C:\Program Files\Git\bin\bash.exe -lc "cd /z/Constructed && <command>"
+```
+
+When adding command examples to this file, prefer Bash syntax. Use PowerShell only when a task specifically requires PowerShell or a Windows-only command has no clean Bash equivalent.
+
 ## Source Architecture Map
 
 Before implementing a subsystem, read the relevant source files directly. These are the current high-value entry points:
@@ -382,12 +406,11 @@ Copy only reference assets/data needed for the current task. Do not copy Java so
 
 Suggested local copy command pattern, if assets are needed:
 
-```powershell
-New-Item -ItemType Directory -Force -Path Assets\PrivateTemp\Create
-New-Item -ItemType Directory -Force -Path Assets\PrivateTemp\Create\src\main
-New-Item -ItemType Directory -Force -Path Assets\PrivateTemp\Create\src\generated
-Copy-Item -Recurse -Force References\Create-mc1.21.1-dev\src\main\resources Assets\PrivateTemp\Create\src\main\
-Copy-Item -Recurse -Force References\Create-mc1.21.1-dev\src\generated\resources Assets\PrivateTemp\Create\src\generated\
+```bash
+mkdir -p Assets/PrivateTemp/Create/src/main
+mkdir -p Assets/PrivateTemp/Create/src/generated
+cp -R References/Create-mc1.21.1-dev/src/main/resources Assets/PrivateTemp/Create/src/main/
+cp -R References/Create-mc1.21.1-dev/src/generated/resources Assets/PrivateTemp/Create/src/generated/
 ```
 
 ## Unity Implementation Strategy
@@ -480,21 +503,23 @@ After code changes, agents must verify that the changed code compiles and record
 
 Preferred verification is Unity Test Framework through the Unity editor or batchmode. Use the Unity version from `ProjectSettings/ProjectVersion.txt`; this project currently targets `6000.4.5f1`.
 
-Suggested Windows batchmode EditMode test command:
+Suggested Git Bash batchmode EditMode test command:
 
-```powershell
-$Unity = "C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.exe"
-& $Unity -batchmode -quit -projectPath "Z:\Constructed" -runTests -testPlatform EditMode -testResults "Temp\EditModeResults.xml" -logFile "Logs\EditModeTests.log"
+```bash
+UNITY="/c/Program Files/Unity/Hub/Editor/6000.4.5f1/Editor/Unity.exe"
+"$UNITY" -batchmode -quit -projectPath "Z:/Constructed" -runTests -testPlatform EditMode -testResults "Temp/EditModeResults.xml" -logFile "Logs/EditModeTests.log"
 ```
 
 If batchmode does not run because the project is already open in the Unity editor, run the tests from the open editor's Test Runner or close the editor and rerun batchmode. If neither is possible, do a compile-only fallback with Unity's bundled compiler for the changed runtime assembly and record the limitation clearly.
 
 Compile-only fallback pattern for plain runtime C# files:
 
-```powershell
-$UnityRoot = "C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor"
-$env:MONO_PATH = "$UnityRoot\Data\MonoBleedingEdge\lib\mono\4.5\Facades;$UnityRoot\Data\MonoBleedingEdge\lib\mono\msbuild\Current\bin\Roslyn"
-& "$UnityRoot\Data\MonoBleedingEdge\bin\mono.exe" "$UnityRoot\Data\MonoBleedingEdge\lib\mono\msbuild\Current\bin\Roslyn\csc.exe" -nologo -target:library -langversion:latest -out:"Temp\Constructed.Core.compilecheck.dll" <changed-runtime-cs-files>
+```bash
+UNITY_ROOT="/c/Program Files/Unity/Hub/Editor/6000.4.5f1/Editor"
+COMPILE_OUT="/c/Users/user/.codex/memories/ConstructedCompile"
+mkdir -p "$COMPILE_OUT"
+export MONO_PATH="$UNITY_ROOT/Data/MonoBleedingEdge/lib/mono/4.5/Facades;$UNITY_ROOT/Data/MonoBleedingEdge/lib/mono/msbuild/Current/bin/Roslyn"
+"$UNITY_ROOT/Data/MonoBleedingEdge/bin/mono.exe" "$UNITY_ROOT/Data/MonoBleedingEdge/lib/mono/msbuild/Current/bin/Roslyn/csc.exe" -nologo -target:library -langversion:latest -out:"$COMPILE_OUT/Constructed.Core.compilecheck.dll" <changed-runtime-cs-files>
 ```
 
 A compile-only fallback is not a substitute for tests. It only proves the selected files compile. When using it, write in `progress_map.md` which assembly/files were checked, whether the command passed, and why full Unity tests were not run.
