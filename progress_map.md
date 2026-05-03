@@ -8,6 +8,10 @@ Current phase: Phase 1 - Core Foundations
 Current step: Step 1.3 - Block definitions and immutable block states
 Status: Complete; waiting for user confirmation before Step 1.4
 
+## GitHub Checkpoints
+
+- `c3827c9` - `Checkpoint core foundations through step 1.3` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
+
 ## Phase 0 - Source Research and Project Rules
 
 Status: Complete
