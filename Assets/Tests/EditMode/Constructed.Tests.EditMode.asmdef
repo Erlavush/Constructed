@@ -1,0 +1,22 @@
+{
+  "name": "Constructed.Tests.EditMode",
+  "rootNamespace": "Constructed.Tests",
+  "references": [
+    "Constructed.Core",
+    "Constructed.Minecraft"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

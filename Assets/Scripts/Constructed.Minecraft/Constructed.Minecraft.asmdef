@@ -1,0 +1,16 @@
+{
+  "name": "Constructed.Minecraft",
+  "rootNamespace": "Constructed.Minecraft",
+  "references": [
+    "Constructed.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

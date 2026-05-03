@@ -105,3 +105,9 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Local reference source checkouts
+/References/
+
+# Private local-only copied/reference assets
+/[Aa]ssets/[Pp]rivate[Tt]emp/
