@@ -11,6 +11,7 @@ Status: Complete; waiting for user confirmation before Step 1.7
 ## Recent Maintenance
 
 - 2026-05-04 - Cleaned `AGENTS.md` to remove stale blank-project wording, shorten broad Create source-study instructions, replace Bash-first command guidance with active-shell guidance, document the local Git `sh.exe` failure fallback, and prefer the Windows `Unity.com` batchmode command. No runtime behavior changed. Verification: documentation-only review; Unity tests not run. Git checkpoint: `e453a43` (`Clean agent guidance`) pushed to `origin/main`.
+- 2026-05-04 - Corrected `AGENTS.md` Unity batchmode examples by removing `-quit` from `-runTests` commands. The previous command could make Unity exit after import/compile before the Test Runner wrote results. No runtime behavior changed. Verification: documentation-only review; Unity tests not run for this maintenance note.
 
 ## GitHub Checkpoints
 
@@ -305,8 +306,9 @@ Behavior added:
 Verification:
 
 - Unity 6000.4.5f1 batchmode compiled the project successfully and regenerated script assemblies, with `Tundra build success` in `Logs/EditModeTests.log`.
-- Unity batchmode still did not create `EditModeResults.xml` or log a Test Runner summary, so full Unity Test Runner execution remains blocked.
+- Unity batchmode compiled successfully but did not create `EditModeResults.xml`; follow-up found the documented command incorrectly included `-quit`, which can cause Unity to exit before command-line tests run.
 - Fallback verification ran a temporary reflection harness against the Unity-compiled `Constructed.Tests.EditMode.dll`; all 51 reflected NUnit `[Test]` methods passed.
+- Manual Unity Editor Test Runner verification from the open editor showed EditMode passing 51/51 tests with 0 failures.
 
 Out of scope:
 

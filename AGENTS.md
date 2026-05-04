@@ -92,10 +92,10 @@ cmd /c git ls-files --others --exclude-standard
 cmd /c git log --oneline --decorate -8
 ```
 
-For Unity batchmode on Windows, prefer `Unity.com` rather than `Unity.exe` so logs are emitted to the console:
+For Unity batchmode on Windows, prefer `Unity.com` rather than `Unity.exe` so logs are emitted to the console. Do not pass `-quit` with `-runTests`; the Test Runner controls shutdown, and `-quit` can make Unity exit after import/compile before tests run.
 
 ```powershell
-& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.com' -batchmode -quit -projectPath 'Z:/Constructed' -runTests -testPlatform EditMode -testResults 'Temp/EditModeResults.xml' -logFile 'Logs/EditModeTests.log'
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.com' -batchmode -projectPath 'Z:/Constructed' -runTests -testPlatform EditMode -testResults 'Temp/EditModeResults.xml' -logFile 'Logs/EditModeTests.log'
 ```
 
 If Unity needs to write outside the workspace, request escalation instead of working around sandbox permissions.
@@ -166,7 +166,7 @@ After code changes, verify compilation/tests and record the result in `progress_
 Preferred verification:
 
 ```powershell
-& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.com' -batchmode -quit -projectPath 'Z:/Constructed' -runTests -testPlatform EditMode -testResults 'Temp/EditModeResults.xml' -logFile 'Logs/EditModeTests.log'
+& 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.com' -batchmode -projectPath 'Z:/Constructed' -runTests -testPlatform EditMode -testResults 'Temp/EditModeResults.xml' -logFile 'Logs/EditModeTests.log'
 ```
 
 If Unity batchmode compiles but does not produce a test results XML, record that exact limitation. A successful script assembly build is not the same as a completed test run.
