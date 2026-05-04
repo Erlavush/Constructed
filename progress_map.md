@@ -8,6 +8,10 @@ Current phase: Phase 1 - Core Foundations
 Current step: Step 1.5 - Block lifecycle callbacks and neighbor updates
 Status: Complete; waiting for user confirmation before Step 1.6
 
+## Recent Maintenance
+
+- 2026-05-04 - Cleaned `AGENTS.md` to remove stale blank-project wording, shorten broad Create source-study instructions, replace Bash-first command guidance with active-shell guidance, document the local Git `sh.exe` failure fallback, and prefer the Windows `Unity.com` batchmode command. No runtime behavior changed. Verification: documentation-only review; Unity tests not run.
+
 ## GitHub Checkpoints
 
 - `c3827c9` - `Checkpoint core foundations through step 1.3` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
