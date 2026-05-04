@@ -7,5 +7,7 @@ namespace Constructed.Minecraft
         void OnBlockRemoved(BlockStateChange change);
 
         void OnNeighborChanged(NeighborBlockChange change);
+
+        void OnScheduledTick(ScheduledBlockTick tick);
     }
 }

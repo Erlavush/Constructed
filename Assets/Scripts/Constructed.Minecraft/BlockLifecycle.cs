@@ -17,6 +17,10 @@ namespace Constructed.Minecraft
             public void OnNeighborChanged(NeighborBlockChange change)
             {
             }
+
+            public void OnScheduledTick(ScheduledBlockTick tick)
+            {
+            }
         }
     }
 }

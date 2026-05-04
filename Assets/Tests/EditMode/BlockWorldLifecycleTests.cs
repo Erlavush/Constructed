@@ -168,6 +168,10 @@ namespace Constructed.Tests
                 NeighborChanges.Add(change);
             }
 
+            public void OnScheduledTick(ScheduledBlockTick tick)
+            {
+            }
+
             public void Clear()
             {
                 Placed.Clear();

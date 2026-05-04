@@ -5,8 +5,8 @@ This file tracks implementation phases, approved steps, completed work, and the 
 ## Current Status
 
 Current phase: Phase 1 - Core Foundations
-Current step: Step 1.5 - Block lifecycle callbacks and neighbor updates
-Status: Complete; waiting for user confirmation before Step 1.6
+Current step: Step 1.6 - Scheduled block ticks
+Status: Complete; waiting for user confirmation before Step 1.7
 
 ## Recent Maintenance
 
@@ -258,6 +258,59 @@ Out of scope:
 
 - No chunks, sections, scheduled ticks, random ticks, block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
 
+### Step 1.6 - Scheduled Block Ticks
+
+Status: Complete
+
+Approved scope:
+
+- Add a minimal scheduled block tick queue to `BlockWorld`.
+- Track deterministic world tick time and execute due scheduled block ticks in stable order.
+- Add `hasScheduled`-style duplicate checks for position plus block id.
+- Add focused EditMode tests.
+
+Reference findings:
+
+- Create uses Minecraft scheduled block ticks as deferred server-side followups in systems such as water wheels, gearshifts, chutes, pipes, tracks, and redstone.
+- Create commonly guards scheduling with `getBlockTicks().hasScheduledTick(pos, block)` before calling `scheduleTick`.
+- Some Create calls pass tick priorities, so the Unity queue includes a minimal priority enum and sorts by trigger tick, priority, then insertion order.
+
+Implemented files:
+
+- `Assets/Scripts/Constructed.Minecraft/ScheduledTickPriority.cs`
+- `Assets/Scripts/Constructed.Minecraft/ScheduledTickPriority.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/ScheduledBlockTick.cs`
+- `Assets/Scripts/Constructed.Minecraft/ScheduledBlockTick.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/IBlockLifecycle.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockLifecycle.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
+- `Assets/Tests/EditMode/BlockWorldLifecycleTests.cs`
+- `Assets/Tests/EditMode/BlockWorldScheduledTickTests.cs`
+- `Assets/Tests/EditMode/BlockWorldScheduledTickTests.cs.meta`
+
+Behavior added:
+
+- `BlockWorld` now owns deterministic tick time through `CurrentTick`.
+- `ScheduleBlockTick` schedules block-definition or block-state ticks by position, delay, and priority.
+- `HasScheduledBlockTick` reports pending ticks by position plus scheduled block id.
+- Duplicate pending scheduled ticks for the same position plus block id are ignored.
+- `Tick()` advances one world tick and runs due scheduled block ticks.
+- `Tick(long)` advances multiple world ticks in deterministic one-tick steps.
+- `RunScheduledBlockTicks()` executes currently due ticks without advancing time.
+- Due ticks execute by trigger tick, priority, and insertion order.
+- Scheduled callbacks dispatch through `IBlockLifecycle.OnScheduledTick` only when the current block at the position still matches the scheduled block id.
+- `Clear()` now clears pending scheduled block ticks as well as stored block states.
+
+Verification:
+
+- Unity 6000.4.5f1 batchmode compiled the project successfully and regenerated script assemblies, with `Tundra build success` in `Logs/EditModeTests.log`.
+- Unity batchmode still did not create `EditModeResults.xml` or log a Test Runner summary, so full Unity Test Runner execution remains blocked.
+- Fallback verification ran a temporary reflection harness against the Unity-compiled `Constructed.Tests.EditMode.dll`; all 51 reflected NUnit `[Test]` methods passed.
+
+Out of scope:
+
+- No chunks, chunk tick containers, random ticks, fluid ticks, block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
+
 ## Planned Phase Outline
 
 1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
@@ -272,4 +325,4 @@ Out of scope:
 
 ## Next Proposed Step
 
-Discuss and confirm Step 1.6 before implementation. Proposed scope: minimal scheduled block tick queue and deterministic execution order for `BlockWorld`, without chunks, random ticks, block entities, entities, rendering, scenes, items, recipes, or Create machines.
+Discuss and confirm Step 1.7 before implementation. Proposed scope: minimal block entity foundation with per-position runtime objects, initialize/tick/lazy-tick/remove/destroy callbacks, behavior composition entry points, and focused EditMode lifecycle tests. Defer items, inventories, recipes, rendering, scenes, networking, and Create machines.
