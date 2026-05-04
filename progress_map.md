@@ -10,7 +10,7 @@ Status: Complete; waiting for user confirmation before Step 1.6
 
 ## Recent Maintenance
 
-- 2026-05-04 - Cleaned `AGENTS.md` to remove stale blank-project wording, shorten broad Create source-study instructions, replace Bash-first command guidance with active-shell guidance, document the local Git `sh.exe` failure fallback, and prefer the Windows `Unity.com` batchmode command. No runtime behavior changed. Verification: documentation-only review; Unity tests not run.
+- 2026-05-04 - Cleaned `AGENTS.md` to remove stale blank-project wording, shorten broad Create source-study instructions, replace Bash-first command guidance with active-shell guidance, document the local Git `sh.exe` failure fallback, and prefer the Windows `Unity.com` batchmode command. No runtime behavior changed. Verification: documentation-only review; Unity tests not run. Git checkpoint: `e453a43` (`Clean agent guidance`) pushed to `origin/main`.
 
 ## GitHub Checkpoints
 
