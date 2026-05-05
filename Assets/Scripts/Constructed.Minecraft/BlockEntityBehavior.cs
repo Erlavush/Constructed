@@ -63,6 +63,14 @@ namespace Constructed.Minecraft
         {
         }
 
+        protected virtual void OnWrite(BlockEntityDataBuilder data)
+        {
+        }
+
+        protected virtual void OnRead(BlockEntityData data)
+        {
+        }
+
         internal void InitializeFromBlockEntity()
         {
             OnInitialize();
@@ -97,6 +105,16 @@ namespace Constructed.Minecraft
         internal void UnloadFromBlockEntity()
         {
             OnUnloaded();
+        }
+
+        internal void WriteDataFromBlockEntity(BlockEntityDataBuilder data)
+        {
+            OnWrite(data);
+        }
+
+        internal void ReadDataFromBlockEntity(BlockEntityData data)
+        {
+            OnRead(data);
         }
     }
 }

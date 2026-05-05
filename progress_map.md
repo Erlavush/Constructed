@@ -5,8 +5,8 @@ This file tracks implementation phases, approved steps, completed work, and the 
 ## Current Status
 
 Current phase: Phase 1 - Core Foundations
-Current step: Step 1.7 - Minimal block entity foundation
-Status: Complete; waiting for user confirmation before Step 1.8
+Current step: Step 1.8 - Block entity serialization and world snapshots
+Status: Complete; waiting for user confirmation before Step 1.9
 
 ## Recent Maintenance
 
@@ -374,6 +374,67 @@ Out of scope:
 - No block entity serialization/persistence yet.
 - No chunk ownership, chunk load/unload model, random ticks, fluid ticks, entities, items, inventories, recipes, rendering, scenes, placement tools, kinetics, or Create machines.
 
+### Step 1.8 - Block Entity Serialization and World Snapshots
+
+Status: Complete
+
+Approved scope:
+
+- Add minimal block entity serialization hooks.
+- Add behavior serialization hooks that share the parent block entity payload.
+- Add deterministic world snapshots for current tick, stored block states, and block entity payloads.
+- Add world snapshot load/deserialize support through a block definition registry.
+- Add focused EditMode round-trip tests.
+
+Reference findings:
+
+- Create's `SmartBlockEntity.write` writes its own block entity data and then forwards the same `CompoundTag` to all attached behaviors.
+- Create's `SmartBlockEntity.read` reads block entity data and then forwards the same payload to behaviors, with deferred behavior attachment available before behavior reads.
+- Create's `BlockEntityBehaviour` exposes `read`, `write`, and `writeSafe` hooks, so behavior composition is part of serialization rather than a separate side channel.
+- Unity implementation keeps this as deterministic string key/value payloads for now instead of introducing NBT/JSON before a save-file format is chosen.
+
+Implemented files:
+
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataValue.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataValue.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityData.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityData.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataBuilder.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataBuilder.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/SerializedWorldBlockEntry.cs`
+- `Assets/Scripts/Constructed.Minecraft/SerializedWorldBlockEntry.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/SerializedBlockEntity.cs`
+- `Assets/Scripts/Constructed.Minecraft/SerializedBlockEntity.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/SerializedBlockWorld.cs`
+- `Assets/Scripts/Constructed.Minecraft/SerializedBlockWorld.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntity.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehavior.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
+- `Assets/Tests/EditMode/BlockWorldSerializationTests.cs`
+- `Assets/Tests/EditMode/BlockWorldSerializationTests.cs.meta`
+
+Behavior added:
+
+- `BlockEntityDataValue`, `BlockEntityData`, and `BlockEntityDataBuilder` provide deterministic string key/value payload storage with typed helpers for ints, longs, and booleans.
+- `BlockEntity.SerializeData()` writes block entity data first and then behavior data in attached behavior order.
+- `BlockEntity` and `BlockEntityBehavior` now have protected `OnWrite` and `OnRead` hooks.
+- `SerializedWorldBlockEntry`, `SerializedBlockEntity`, and `SerializedBlockWorld` represent the in-memory snapshot format for current block state storage and block entity payloads.
+- `BlockWorld.Serialize()` returns stored non-air block states and block entities in stable position order.
+- `BlockWorld.Deserialize(...)` and `LoadSnapshot(...)` restore world tick, block states, block entity runtime objects, and block entity payloads from a snapshot using a block registry.
+- Snapshot loading clears existing world contents and unloads previous block entities without dispatching normal placement, removal, neighbor, or tick callbacks.
+- Snapshot loading rejects unknown block ids, duplicate positions, orphan block entity payloads, and block entity type mismatches.
+
+Verification:
+
+- Unity 6000.4.5f1 batchmode EditMode tests passed 63/63 with 0 failures.
+- Test output was written to `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml`.
+- Unity logged that it was saving `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
+
+Out of scope:
+
+- No JSON/NBT/file save format yet.
+- No scheduled tick serialization, chunk ownership, chunk load/unload persistence, random ticks, fluid ticks, items, inventories, recipes, rendering, scenes, placement tools, networking, kinetics, or Create machines.
+
 ## Planned Phase Outline
 
 1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
@@ -388,4 +449,4 @@ Out of scope:
 
 ## Next Proposed Step
 
-Discuss and confirm Step 1.8 before implementation. Proposed scope: minimal block entity serialization hooks and world snapshot save/load for current block states plus block entity payloads, with focused EditMode round-trip tests. Defer items, inventories, recipes, rendering, scenes, networking, chunks, and Create machines.
+Discuss and confirm Step 1.9 before implementation. Proposed scope: minimal item definitions and immutable item stacks with registry ids, count validation, stack splitting/merging helpers, deterministic serialization, and focused EditMode tests. Defer inventories, item entities, recipes, rendering, scenes, networking, and Create machines.

@@ -94,6 +94,16 @@ namespace Constructed.Minecraft
                 behavior.InitializeFromBlockEntity();
         }
 
+        public BlockEntityData SerializeData()
+        {
+            BlockEntityDataBuilder data = new BlockEntityDataBuilder();
+            OnWrite(data);
+            foreach (BlockEntityBehavior behavior in behaviors)
+                behavior.WriteDataFromBlockEntity(data);
+
+            return data.Build();
+        }
+
         protected void AddBehavior(BlockEntityBehavior behavior)
         {
             if (behavior == null)
@@ -136,6 +146,14 @@ namespace Constructed.Minecraft
         }
 
         protected virtual void OnUnloaded()
+        {
+        }
+
+        protected virtual void OnWrite(BlockEntityDataBuilder data)
+        {
+        }
+
+        protected virtual void OnRead(BlockEntityData data)
         {
         }
 
@@ -211,6 +229,13 @@ namespace Constructed.Minecraft
             OnUnloaded();
             foreach (BlockEntityBehavior behavior in behaviors)
                 behavior.UnloadFromBlockEntity();
+        }
+
+        internal void DeserializeDataFromWorld(BlockEntityData data)
+        {
+            OnRead(data);
+            foreach (BlockEntityBehavior behavior in behaviors)
+                behavior.ReadDataFromBlockEntity(data);
         }
     }
 }

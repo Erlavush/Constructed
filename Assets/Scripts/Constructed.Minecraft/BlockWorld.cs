@@ -260,11 +260,7 @@ namespace Constructed.Minecraft
             if (blockEntities.Count == 0)
                 return 0;
 
-            List<BlockEntityTickEntry> tickEntries = new List<BlockEntityTickEntry>(blockEntities.Count);
-            foreach (KeyValuePair<BlockPos, BlockEntity> pair in blockEntities)
-                tickEntries.Add(new BlockEntityTickEntry(pair.Key, pair.Value));
-
-            tickEntries.Sort(CompareBlockEntityTickEntries);
+            List<BlockEntityTickEntry> tickEntries = GetSortedBlockEntityEntries();
 
             int executed = 0;
             foreach (BlockEntityTickEntry tickEntry in tickEntries)
@@ -280,6 +276,65 @@ namespace Constructed.Minecraft
             }
 
             return executed;
+        }
+
+        public SerializedBlockWorld Serialize()
+        {
+            List<SerializedWorldBlockEntry> blockEntries = new List<SerializedWorldBlockEntry>(states.Count);
+            foreach (WorldBlockEntry entry in GetStoredBlocks())
+                blockEntries.Add(new SerializedWorldBlockEntry(entry.Position, entry.State.Serialize()));
+
+            List<SerializedBlockEntity> blockEntityEntries = new List<SerializedBlockEntity>(blockEntities.Count);
+            foreach (BlockEntityTickEntry entry in GetSortedBlockEntityEntries())
+            {
+                blockEntityEntries.Add(new SerializedBlockEntity(
+                    entry.Position,
+                    entry.BlockEntity.Type.Id,
+                    entry.BlockEntity.SerializeData()));
+            }
+
+            return new SerializedBlockWorld(CurrentTick, blockEntries, blockEntityEntries);
+        }
+
+        public static BlockWorld Deserialize(
+            BlockState airState,
+            SerializedBlockWorld snapshot,
+            Registry<BlockDefinition> blockRegistry)
+        {
+            BlockWorld world = new BlockWorld(airState, snapshot.CurrentTick);
+            world.LoadSnapshot(snapshot, blockRegistry);
+            return world;
+        }
+
+        public void LoadSnapshot(SerializedBlockWorld snapshot, Registry<BlockDefinition> blockRegistry)
+        {
+            if (blockRegistry == null)
+                throw new ArgumentNullException(nameof(blockRegistry));
+
+            Clear();
+            clock.Reset(snapshot.CurrentTick);
+
+            foreach (SerializedWorldBlockEntry entry in snapshot.Blocks)
+            {
+                BlockDefinition block = blockRegistry.GetValue(entry.State.BlockId);
+                BlockState state = block.CreateState(entry.State);
+                if (IsAir(state))
+                    continue;
+
+                states.Add(entry.Position, state);
+                CreateBlockEntityForState(entry.Position, state);
+            }
+
+            foreach (SerializedBlockEntity serializedBlockEntity in snapshot.BlockEntities)
+            {
+                BlockEntity blockEntity = GetBlockEntity(serializedBlockEntity.Position);
+                if (blockEntity == null)
+                    throw new InvalidOperationException($"Serialized block entity {serializedBlockEntity.TypeId} at {serializedBlockEntity.Position} has no matching block entity block state.");
+                if (blockEntity.Type.Id != serializedBlockEntity.TypeId)
+                    throw new InvalidOperationException($"Serialized block entity type {serializedBlockEntity.TypeId} at {serializedBlockEntity.Position} does not match loaded type {blockEntity.Type.Id}.");
+
+                blockEntity.DeserializeDataFromWorld(serializedBlockEntity.Data);
+            }
         }
 
         public void Clear()
@@ -315,6 +370,16 @@ namespace Constructed.Minecraft
                 return y;
 
             return left.Position.Z.CompareTo(right.Position.Z);
+        }
+
+        private List<BlockEntityTickEntry> GetSortedBlockEntityEntries()
+        {
+            List<BlockEntityTickEntry> tickEntries = new List<BlockEntityTickEntry>(blockEntities.Count);
+            foreach (KeyValuePair<BlockPos, BlockEntity> pair in blockEntities)
+                tickEntries.Add(new BlockEntityTickEntry(pair.Key, pair.Value));
+
+            tickEntries.Sort(CompareBlockEntityTickEntries);
+            return tickEntries;
         }
 
         private static int CompareBlockEntityTickEntries(BlockEntityTickEntry left, BlockEntityTickEntry right)
@@ -365,7 +430,16 @@ namespace Constructed.Minecraft
             if (nextType == null)
                 return;
 
-            BlockEntity blockEntity = nextType.Create(this, position, next);
+            CreateBlockEntityForState(position, next);
+        }
+
+        private void CreateBlockEntityForState(BlockPos position, BlockState state)
+        {
+            BlockEntityType blockEntityType = state.Definition.BlockEntityType;
+            if (blockEntityType == null)
+                return;
+
+            BlockEntity blockEntity = blockEntityType.Create(this, position, state);
             blockEntities.Add(position, blockEntity);
         }
 
