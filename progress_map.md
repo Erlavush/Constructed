@@ -5,11 +5,12 @@ This file tracks implementation phases, approved steps, completed work, and the 
 ## Current Status
 
 Current phase: Phase 1 - Core Foundations
-Current step: Step 1.8 - Block entity serialization and world snapshots
-Status: Complete; waiting for user confirmation before Step 1.9
+Current step: Step 1.9 - Minimal item definitions and immutable item stacks
+Status: Complete; waiting for user confirmation before Step 1.10
 
 ## Recent Maintenance
 
+- 2026-05-06 - Updated `AGENTS.md` to prefer faster low-overhead verification and checkpointing: no Unity tests for docs-only work, no full XML/log reads after a clean test exit, no duplicate progress-map-only checkpoint commits, and docs-only maintenance does not need a Git checkpoint unless requested. No runtime behavior changed. Verification: documentation-only review; Unity tests not run.
 - 2026-05-04 - Cleaned `AGENTS.md` to remove stale blank-project wording, shorten broad Create source-study instructions, replace Bash-first command guidance with active-shell guidance, document the local Git `sh.exe` failure fallback, and prefer the Windows `Unity.com` batchmode command. No runtime behavior changed. Verification: documentation-only review; Unity tests not run. Git checkpoint: `e453a43` (`Clean agent guidance`) pushed to `origin/main`.
 - 2026-05-04 - Corrected `AGENTS.md` Unity batchmode examples by removing `-quit` from `-runTests` commands. The previous command could make Unity exit after import/compile before the Test Runner wrote results. No runtime behavior changed. Verification: documentation-only review; Unity tests not run for this maintenance note.
 
@@ -437,6 +438,55 @@ Out of scope:
 - No JSON/NBT/file save format yet.
 - No scheduled tick serialization, chunk ownership, chunk load/unload persistence, random ticks, fluid ticks, items, inventories, recipes, rendering, scenes, placement tools, networking, kinetics, or Create machines.
 
+### Step 1.9 - Minimal Item Definitions and Immutable Item Stacks
+
+Status: Complete
+
+Approved scope:
+
+- Add minimal item definitions keyed by `ResourceLocation`.
+- Add immutable item stacks with count validation and empty stack representation.
+- Add stack split and merge helpers that return remainders instead of mutating source stacks.
+- Add deterministic item stack serialization through item registry ids.
+- Add focused EditMode tests.
+
+Reference findings:
+
+- Create registers item ids centrally in `AllItems.java`, with most simple items using default stack size and selected items using `stacksTo(1)` or `stacksTo(16)`.
+- Create machinery uses Minecraft `ItemStack` copy, split, and count helpers heavily, but this Unity step intentionally keeps stacks immutable until inventories and transport are introduced.
+
+Implemented files:
+
+- `Assets/Scripts/Constructed.Minecraft/ItemDefinition.cs`
+- `Assets/Scripts/Constructed.Minecraft/ItemDefinition.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/ItemStack.cs`
+- `Assets/Scripts/Constructed.Minecraft/ItemStack.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/SerializedItemStack.cs`
+- `Assets/Scripts/Constructed.Minecraft/SerializedItemStack.cs.meta`
+- `Assets/Tests/EditMode/ItemDefinitionTests.cs`
+- `Assets/Tests/EditMode/ItemDefinitionTests.cs.meta`
+- `Assets/Tests/EditMode/ItemStackTests.cs`
+- `Assets/Tests/EditMode/ItemStackTests.cs.meta`
+
+Behavior added:
+
+- `ItemDefinition` owns an item id and max stack size, defaulting to 64.
+- `ItemStack.Empty` represents the empty stack; non-empty stacks require a definition and a count within the item's max stack size.
+- `ItemStack.WithCount`, `Split`, and `Merge` return new stacks and preserve source stack immutability.
+- Merge fills available capacity and returns overflow as a remainder stack.
+- `SerializedItemStack` stores item id plus count, with default struct value representing empty.
+- `ItemStack.Deserialize(...)` restores stacks through a `Registry<ItemDefinition>` and rejects unknown item ids.
+
+Verification:
+
+- Unity 6000.4.5f1 batchmode EditMode command exited with code 0.
+- Unity fallback result file `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml` reported 73/73 tests passed with 0 failures.
+- Unity logged that it saved `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
+
+Out of scope:
+
+- No inventories, item entities, dropped item simulation, item components, durability, data components, recipes, JSON/NBT save format, rendering, scenes, placement tools, networking, kinetics, or Create machines.
+
 ## Planned Phase Outline
 
 1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
@@ -451,4 +501,4 @@ Out of scope:
 
 ## Next Proposed Step
 
-Discuss and confirm Step 1.9 before implementation. Proposed scope: minimal item definitions and immutable item stacks with registry ids, count validation, stack splitting/merging helpers, deterministic serialization, and focused EditMode tests. Defer inventories, item entities, recipes, rendering, scenes, networking, and Create machines.
+Discuss and confirm Step 1.10 before implementation. Proposed scope: minimal inventory container and slots using immutable `ItemStack` insertion/extraction helpers, stack limits, stable slot serialization, and focused EditMode tests. Defer item entities, dropped item simulation, recipes, rendering, scenes, networking, and Create machines.

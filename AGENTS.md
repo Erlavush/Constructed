@@ -169,9 +169,13 @@ Preferred verification:
 & 'C:\Program Files\Unity\Hub\Editor\6000.4.5f1\Editor\Unity.com' -batchmode -projectPath 'Z:/Constructed' -runTests -testPlatform EditMode -testResults 'Temp/EditModeResults.xml' -logFile 'Logs/EditModeTests.log'
 ```
 
+Keep verification lightweight. If Unity exits successfully from `-runTests`, do not read or paste full XML/log contents; record the command and pass result. Inspect only a short result summary if needed. Read logs or full XML only when the command fails, exits ambiguously, or the requested result cannot otherwise be determined.
+
 If Unity batchmode compiles but does not produce a test results XML, record that exact limitation. A successful script assembly build is not the same as a completed test run.
 
 Use compile-only fallback only when Unity Test Runner is blocked, and record which assemblies/files were checked and why full tests were not run.
+
+For documentation-only changes, do not run Unity tests unless the user explicitly asks. Record the verification as documentation-only review.
 
 ## Approval Rule
 
@@ -195,9 +199,11 @@ At the end of every confirmed implementation step or meaningful maintenance pass
 
 Keep current phase/step status accurate. Do not mark a future gameplay step as started unless the user has confirmed it.
 
+Keep `progress_map.md` updates concise. For implementation work, update it once before the checkpoint commit so the implementation and progress record land together. Do not create a second progress-map-only commit just to record the hash of the commit that was just made; report the hash and push result in the final response instead.
+
 ## GitHub Checkpoint Rule
 
-After a confirmed implementation step is finished, verified, and recorded in `progress_map.md`, create a Git checkpoint and push it to the project remote when Git is healthy.
+After a confirmed implementation step is finished, verified, and recorded in `progress_map.md`, create one Git checkpoint and push it to the project remote when Git is healthy. Documentation-only maintenance does not need a checkpoint or push unless the user explicitly asks.
 
 Project remote:
 
@@ -210,8 +216,8 @@ Checkpoint workflow:
 1. Review changed files. If `git status --short` fails with the local `sh.exe` error, use `git diff-index --name-status HEAD --` and related fallback commands.
 2. Stage only files that belong to the completed step.
 3. Never stage or push `Assets/PrivateTemp/Create` or copied Create assets.
-4. Commit with a clear message.
+4. Commit with a clear message, including the already-updated `progress_map.md` in the same commit.
 5. Push to `origin` on the current branch.
-6. Record the commit hash and push result in `progress_map.md`.
+6. Report the commit hash and push result in the final response. Do not make a follow-up metadata-only commit solely to record that hash.
 
 Do not force-push, rewrite history, reset the worktree, or revert unrelated user changes unless explicitly asked.
