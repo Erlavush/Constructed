@@ -3,7 +3,8 @@
   "rootNamespace": "Constructed.Tests",
   "references": [
     "Constructed.Core",
-    "Constructed.Minecraft"
+    "Constructed.Minecraft",
+    "Constructed.Create"
   ],
   "includePlatforms": [
     "Editor"

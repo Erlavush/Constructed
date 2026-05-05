@@ -1,504 +1,57 @@
 # Constructed Progress Map
 
-This file tracks implementation phases, approved steps, completed work, and the current project state. Future agents must update it at the end of every confirmed step or feature.
+Concise source of truth for project progress. `AGENTS.md` holds standing rules, reference versions, command guidance, approval rules, and private asset rules. Keep this file short enough for agents to read every turn.
 
 ## Current Status
 
-Current phase: Phase 1 - Core Foundations
-Current step: Step 1.9 - Minimal item definitions and immutable item stacks
-Status: Complete; waiting for user confirmation before Step 1.10
+- Phase: Phase 1 - Core Foundations.
+- Latest completed step: Step 1.10 - minimal inventory container and single-block Create Item Vault storage.
+- Latest verification: Unity 6000.4.5f1 EditMode passed 83/83 tests on 2026-05-06. Unity exited code 0 and wrote the result to `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml`; workspace `Temp/EditModeResults.xml` was absent after the run.
+- Next proposed step: Step 1.11 - demo content catalog and one-chunk flat surface bootstrap for the first vertical slice.
+- Approval state: wait for user confirmation before starting the next gameplay/subsystem step.
+
+## Completed Steps
+
+| Step | Status | What Exists Now | Verification / Checkpoint |
+| --- | --- | --- | --- |
+| Phase 0 | Complete | Official Create reference checkout confirmed at `References/Create-mc1.21.1-dev`; architecture and project rules captured in `AGENTS.md`. | Reference versions and rules in `AGENTS.md`. |
+| 1.1 Core primitives | Complete | `ResourceLocation`, `Direction`, `Axis`, `AxisDirection`, `BlockPos`, `SimulationClock`. | Included in checkpoint `c3827c9`. Early batchmode test XML was blocked by editor state. |
+| 1.2 Registries and tags | Complete | `Registry<T>`, `RegistryEntry<T>`, `TagKey<T>`, `TagCollection<T>`, duplicate/frozen checks, typed tag membership. | Included in checkpoint `c3827c9`; compile/test-source checks passed. |
+| 1.3 Block definitions and states | Complete | `Constructed.Minecraft` assembly, `StateProperty<T>`, `BlockDefinition`, immutable `BlockState`, deterministic `SerializedBlockState`. | Included in checkpoint `c3827c9`; compile/test-source checks passed. |
+| 1.4 In-memory block world | Complete | `BlockWorld` stores non-air block states by `BlockPos`, explicit air fallback, set/remove/clear, stable stored-block enumeration. | Checkpoint `63acdfc`. |
+| 1.5 Lifecycle and neighbor updates | Complete | `IBlockLifecycle`, placement/removal/replacement callbacks, six-direction neighbor update callbacks. | Checkpoint `22cd4c2`. |
+| 1.6 Scheduled block ticks | Complete | Deterministic world tick time, scheduled block tick queue, priority ordering, duplicate guard by position plus block id. | Reflection/editor verification passed 51/51; checkpoint `30a3e2f`. |
+| 1.7 Block entity foundation | Complete | `BlockEntityType`, `BlockEntity`, typed behaviors, create/tick/lazy-tick/state-change/neighbor/unload/destroy lifecycle. | Unity EditMode passed 59/59; checkpoint `d1a48e5`. |
+| 1.8 Block entity serialization | Complete | `BlockEntityData`, behavior read/write hooks, `SerializedBlockWorld`, deterministic world snapshot serialize/load. | Unity EditMode passed 63/63; checkpoint `97a29f7`. |
+| 1.9 Item definitions and stacks | Complete | `ItemDefinition`, immutable `ItemStack`, `SerializedItemStack`, empty stack, count validation, split/merge helpers, registry-based restore. | Unity EditMode passed 73/73; checkpoint `f50c779`. |
+| 1.10 Inventories and Item Vault | Complete | `InventoryContainer`, `SerializedInventorySlot`, `Constructed.Create` assembly, single-block `ItemVaultBlockEntity`, `ItemVaultBlock` definition/factory, 20-slot vault storage, slot serialization through item registries. | Unity EditMode passed 83/83; checkpoint pending this turn. |
+
+## Current Boundaries
+
+- Simulation code should stay in plain C# services/data; Unity objects remain presentation/tooling until a presentation step is confirmed.
+- Use official Minecraft/NeoForge/Create source in this repo only for the smallest relevant reference set before implementing confirmed gameplay behavior.
+- Do not implement from assumptions, previous prototypes, or copied Java source.
+- Do not commit copied Create assets; private copied assets belong only under `Assets/PrivateTemp/Create`.
+- Keep verification and checkpointing lightweight: one relevant Unity run after code changes, concise result recording, one implementation checkpoint when requested by the step workflow.
+
+## Reference Notes To Preserve
+
+- Scheduled ticks: Create often guards `scheduleTick` with `hasScheduledTick(pos, block)` and may pass priorities; the Unity queue already models duplicate checks and stable priority ordering.
+- Block entities: Create `SmartBlockEntity` initializes on first tick, runs an immediate lazy tick, and lets attached behaviors participate in tick/lazy-tick/read/write/lifecycle callbacks; the Unity foundation mirrors that shape.
+- Serialization: behavior data currently shares the parent block entity payload as deterministic string key/value data; no JSON/NBT/file save format is chosen yet.
+- Items: Create registers items centrally in `AllItems.java`; most use default stack size, while selected items use `stacksTo(1)` or `stacksTo(16)`. Unity item stacks are intentionally immutable until inventories/transport need mutation boundaries.
+- Item Vault: Create's per-block vault capacity defaults to 20 stacks and full vaults form controller-based multiblocks. Unity currently implements only one block of Item Vault storage; multiblock connectivity, manual restrictions, capabilities, and rendering are deferred.
+
+## Not Started Yet
+
+- Item entities, dropped item simulation, item components, durability, recipes, JSON/NBT save files, data import, chunks, rendering, scenes, input, networking, kinetics, belts, funnels, logistics, processing machines, Item Vault multiblocks, contraptions, trains, fluids, worldgen, tutorials, and multiplayer.
 
 ## Recent Maintenance
 
-- 2026-05-06 - Updated `AGENTS.md` to prefer faster low-overhead verification and checkpointing: no Unity tests for docs-only work, no full XML/log reads after a clean test exit, no duplicate progress-map-only checkpoint commits, and docs-only maintenance does not need a Git checkpoint unless requested. No runtime behavior changed. Verification: documentation-only review; Unity tests not run.
-- 2026-05-04 - Cleaned `AGENTS.md` to remove stale blank-project wording, shorten broad Create source-study instructions, replace Bash-first command guidance with active-shell guidance, document the local Git `sh.exe` failure fallback, and prefer the Windows `Unity.com` batchmode command. No runtime behavior changed. Verification: documentation-only review; Unity tests not run. Git checkpoint: `e453a43` (`Clean agent guidance`) pushed to `origin/main`.
-- 2026-05-04 - Corrected `AGENTS.md` Unity batchmode examples by removing `-quit` from `-runTests` commands. The previous command could make Unity exit after import/compile before the Test Runner wrote results. No runtime behavior changed. Verification: documentation-only review; Unity tests not run for this maintenance note.
+- 2026-05-06: Compacted this progress map to remove repeated file lists and old verbose verification details without dropping current state, step outcomes, checkpoints, or reference findings. Verification: documentation-only review; Unity tests not run.
+- 2026-05-06: Updated `AGENTS.md` for faster low-overhead verification/checkpointing: no Unity tests for docs-only work, no full XML/log reads after a clean test exit, no duplicate progress-map-only commits, and no docs-only checkpoint unless requested.
+- 2026-05-04: Cleaned `AGENTS.md` shell and Unity command guidance, including the local Git `sh.exe` fallback and removing `-quit` from Unity `-runTests`.
 
-## GitHub Checkpoints
+## Next Step
 
-- `c3827c9` - `Checkpoint core foundations through step 1.3` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `63acdfc` - `Step 1.4 minimal block world storage` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `b155c44` - `Prefer Git Bash in agent instructions` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `ebc0d50` - `Remove hard-coded Bash path guidance` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `22cd4c2` - `Step 1.5 block lifecycle and neighbor updates` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `30a3e2f` - `Step 1.6 scheduled block ticks` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `d1a48e5` - `Step 1.7 block entity foundation` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-- `97a29f7` - `Step 1.8 block entity serialization` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
-
-## Phase 0 - Source Research and Project Rules
-
-Status: Complete
-
-Completed work:
-
-- Read the project rules and confirmed this is a blank Unity 6 URP project.
-- Verified the official Create reference checkout at `References/Create-mc1.21.1-dev`.
-- Confirmed source versions from `gradle.properties`: Create 6.0.11, Minecraft 1.21.1, NeoForge 21.1.219, Java 21.
-- Studied Create architecture directly from source entry points including `Create.java`, `CreateClient.java`, `AllBlocks.java`, `AllBlockEntityTypes.java`, `AllRecipeTypes.java`, `RotationPropagator.java`, `KineticNetwork.java`, belt source files, config, events, datagen, rendering, and assets.
-- Expanded `AGENTS.md` with researched architecture notes, Unity implementation strategy, private asset rules, testing expectations, step-by-step approval rule, and this progress map rule.
-- Added `AGENTS.md` verification guidance requiring Unity Test Framework or batchmode attempts after code changes, with a Unity-bundled compiler fallback only when full test execution is blocked.
-- Added `AGENTS.md` GitHub checkpoint guidance requiring each completed step to be committed and pushed to `https://github.com/Erlavush/Constructed.git` after verification and progress-map updates.
-- Revised `AGENTS.md` shell guidance to use the active Bash terminal without hard-coded `bash.exe` paths.
-
-## Phase 1 - Core Foundations
-
-Goal: Build the minimal Minecraft-like plain C# foundation needed before any gameplay machines or showcase scenes.
-
-### Step 1.1 - Core Primitives
-
-Status: Complete
-
-Approved scope:
-
-- Add `ResourceLocation` style ids.
-- Add `Direction`, `Axis`, and direction helper behavior.
-- Add `BlockPos` integer grid positions and deterministic offsets.
-- Add a minimal deterministic tick clock.
-- Add focused EditMode tests.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Core/Constructed.Core.asmdef`
-- `Assets/Scripts/Constructed.Core/Axis.cs`
-- `Assets/Scripts/Constructed.Core/AxisDirection.cs`
-- `Assets/Scripts/Constructed.Core/Direction.cs`
-- `Assets/Scripts/Constructed.Core/DirectionExtensions.cs`
-- `Assets/Scripts/Constructed.Core/BlockPos.cs`
-- `Assets/Scripts/Constructed.Core/ResourceLocation.cs`
-- `Assets/Scripts/Constructed.Core/SimulationClock.cs`
-- `Assets/Tests/EditMode/Constructed.Tests.EditMode.asmdef`
-- `Assets/Tests/EditMode/BlockPosTests.cs`
-- `Assets/Tests/EditMode/DirectionTests.cs`
-- `Assets/Tests/EditMode/ResourceLocationTests.cs`
-- `Assets/Tests/EditMode/SimulationClockTests.cs`
-
-Behavior added:
-
-- `ResourceLocation` supports `namespace:path` ids, default namespace parsing, validation, equality, and stable string formatting.
-- `Direction`, `Axis`, and `AxisDirection` model the Minecraft-style six-direction grid with opposite, axis, axis direction, horizontal rotation, normals, and step offsets.
-- `BlockPos` provides immutable integer voxel positions with offset and directional movement helpers.
-- `SimulationClock` provides a deterministic integer tick counter for later server-authoritative simulation work.
-
-Verification:
-
-- Added focused EditMode tests for resource ids, grid positions, directions, and tick clock behavior.
-- Runtime core compiled successfully using Unity 6000.4.5f1's bundled C# compiler.
-- Unity batchmode EditMode execution did not produce test results while the project was already open in the Unity editor. Re-run the Unity Test Runner after closing the editor or from inside the open editor.
-
-Out of scope:
-
-- No gameplay machines.
-- No block/item registries yet.
-- No world grid storage yet.
-- No Unity scenes or rendering.
-
-### Step 1.2 - Registry and Tag Foundations
-
-Status: Complete
-
-Approved scope:
-
-- Add a minimal generic registry keyed by `ResourceLocation`.
-- Add stable registry entries and duplicate/frozen registration checks.
-- Add typed tag keys and tag membership storage by id.
-- Add focused EditMode tests.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Core/RegistryEntry.cs`
-- `Assets/Scripts/Constructed.Core/Registry.cs`
-- `Assets/Scripts/Constructed.Core/TagKey.cs`
-- `Assets/Scripts/Constructed.Core/TagCollection.cs`
-- `Assets/Tests/EditMode/RegistryTests.cs`
-- `Assets/Tests/EditMode/TagKeyTests.cs`
-- `Assets/Tests/EditMode/TagCollectionTests.cs`
-
-Behavior added:
-
-- `Registry<T>` stores values by `ResourceLocation`, assigns stable insertion indices, supports lookup by id and value, rejects duplicate ids/values, rejects uninitialized ids, and can be frozen after bootstrap.
-- `RegistryEntry<T>` records id, index, and value as a stable entry snapshot.
-- `TagKey<T>` identifies a tag by both registry id and tag id so block/item/recipe tags cannot be accidentally mixed.
-- `TagCollection<T>` stores tag membership by resource id, preserves insertion order, deduplicates replacements, resolves registered values, and rejects tags from the wrong registry.
-
-Verification:
-
-- Added focused EditMode tests for registry registration, lookup, duplicate rejection, freeze behavior, tag-key equality, tag membership, tag replacement, and wrong-registry rejection.
-- Runtime core compiled successfully using Unity 6000.4.5f1's bundled C# compiler.
-- EditMode test source compiled successfully against the runtime compile-check assembly and Unity's bundled NUnit assembly.
-- Full Unity Test Runner execution was not run because active Unity processes are already attached to this project. Run the tests from the open editor's Test Runner, or close Unity and rerun batchmode.
-
-Out of scope:
-
-- No concrete block, item, recipe, or Create content definitions yet.
-- No data-pack or JSON import yet.
-- No world storage, rendering, scenes, or gameplay machines.
-
-### Step 1.3 - Block Definitions and Immutable Block States
-
-Status: Complete
-
-Approved scope:
-
-- Add minimal block definitions keyed by `ResourceLocation`.
-- Add typed state properties with valid values and defaults.
-- Add immutable block states with typed get/set helpers.
-- Add deterministic block-state serialization to id plus property strings.
-- Add focused EditMode tests.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/Constructed.Minecraft.asmdef`
-- `Assets/Scripts/Constructed.Minecraft/IStateProperty.cs`
-- `Assets/Scripts/Constructed.Minecraft/StateProperty.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockDefinition.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockState.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockStatePropertyValue.cs`
-- `Assets/Scripts/Constructed.Minecraft/SerializedBlockState.cs`
-- `Assets/Tests/EditMode/Constructed.Tests.EditMode.asmdef`
-- `Assets/Tests/EditMode/StatePropertyTests.cs`
-- `Assets/Tests/EditMode/BlockDefinitionTests.cs`
-- `Assets/Tests/EditMode/BlockStateTests.cs`
-
-Behavior added:
-
-- Created the `Constructed.Minecraft` assembly for Minecraft-like simulation systems above the core primitives.
-- `StateProperty<T>` defines typed block-state properties with lowercase Minecraft-style names, finite valid values, defaults, parsing, and deterministic string serialization.
-- `BlockDefinition` owns a block id, declared state properties, and a default immutable `BlockState`.
-- `BlockState` supports typed reads, typed immutable mutation, untyped validation for deserialization paths, equality, and deterministic serialization.
-- `SerializedBlockState` and `BlockStatePropertyValue` provide a simple id-plus-property-string snapshot for later save/load and data import work.
-
-Verification:
-
-- Added focused EditMode tests for state property defaults/validation/serialization, block definition defaults, immutable state mutation, invalid property rejection, and serialization round trip.
-- `Constructed.Core` runtime assembly compiled successfully using Unity 6000.4.5f1's bundled C# compiler.
-- `Constructed.Minecraft` runtime assembly compiled successfully against the core compile-check assembly.
-- EditMode test source compiled successfully against the core and Minecraft compile-check assemblies plus Unity's bundled NUnit assembly.
-- Full Unity Test Runner execution was not run because active Unity processes are already attached to this project. Run the tests from the open editor's Test Runner, or close Unity and rerun batchmode.
-
-Out of scope:
-
-- No world storage, chunks, neighbor updates, scheduled ticks, or block lifecycle yet.
-- No concrete Minecraft/Create block catalog yet.
-- No items, recipes, rendering, scenes, placement, or gameplay machines.
-
-### Step 1.4 - Minimal In-Memory World Block Storage
-
-Status: Complete
-
-Approved scope:
-
-- Add an explicit air/default block state boundary for empty positions.
-- Add plain C# in-memory storage keyed by `BlockPos`.
-- Add `Get`, `Set`, `Remove`, occupancy checks, and stable enumeration of stored non-air states.
-- Add focused EditMode tests.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
-- `Assets/Scripts/Constructed.Minecraft/WorldBlockEntry.cs`
-- `Assets/Tests/EditMode/BlockWorldTests.cs`
-
-Behavior added:
-
-- `BlockWorld` stores non-air `BlockState` values by `BlockPos` in memory.
-- Missing positions return the explicit configured air state.
-- Setting an air state removes storage for that position.
-- `SetBlockState` and `RemoveBlock` return the previous state for later lifecycle/event use.
-- `HasStoredBlock`, `StoredBlockCount`, `Clear`, and deterministic `GetStoredBlocks` enumeration support simple inspection and tests.
-- Air recognition uses the configured air block id, not object reference identity, so equivalent `minecraft:air` states clear storage.
-
-Verification:
-
-- Added focused EditMode tests for missing-position air fallback, set/get behavior, setting air as removal, explicit removal, stable stored-block ordering, id-based air recognition, and null-state rejection.
-- Initial compile-check output attempts under Unity `Temp` and `Library` were blocked by sandbox/write permissions, not by source errors.
-- `Constructed.Core` runtime assembly compiled successfully using Unity 6000.4.5f1's bundled C# compiler with outputs under `C:\Users\user\.codex\memories\ConstructedCompile`.
-- `Constructed.Minecraft` runtime assembly compiled successfully against the core compile-check assembly.
-- EditMode test source compiled successfully against the core and Minecraft compile-check assemblies plus Unity's bundled NUnit assembly.
-- Full Unity Test Runner execution was not run because active Unity processes are already attached to this project. Run the tests from the open editor's Test Runner, or close Unity and rerun batchmode.
-
-Out of scope:
-
-- No chunks, sections, neighbor updates, scheduled ticks, random ticks, or block lifecycle hooks yet.
-- No block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
-
-### Step 1.5 - Block Lifecycle Callbacks and Neighbor Updates
-
-Status: Complete
-
-Approved scope:
-
-- Add a minimal block lifecycle callback interface attached to `BlockDefinition`.
-- Dispatch placement, removal, and replacement callbacks from `BlockWorld` set/remove operations.
-- Dispatch neighbor-update callbacks to stored non-air neighbors around changed positions.
-- Add focused EditMode tests.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/IBlockLifecycle.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockLifecycle.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockStateChange.cs`
-- `Assets/Scripts/Constructed.Minecraft/NeighborBlockChange.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockDefinition.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
-- `Assets/Tests/EditMode/BlockWorldLifecycleTests.cs`
-
-Behavior added:
-
-- `BlockDefinition` now owns an `IBlockLifecycle` handler, defaulting to `BlockLifecycle.None`.
-- `BlockWorld.SetBlockState` ignores no-op state writes, canonicalizes air writes to the configured air state, and dispatches callbacks after real storage changes.
-- Placement callbacks are sent to the new non-air block state.
-- Removal callbacks are sent to the previous non-air block state.
-- Replacement from one non-air state to another dispatches removal for the old state and placement for the new state.
-- Neighbor updates are sent to stored non-air blocks in the six adjacent positions, with direction and old/new changed-state context.
-
-Verification:
-
-- Added focused EditMode tests for placement callbacks, removal callbacks, replacement callbacks, no-op writes, and neighbor-update direction/context.
-- `Constructed.Core` runtime assembly compiled successfully using Unity 6000.4.5f1's bundled C# compiler with outputs under `C:\Users\user\.codex\memories\ConstructedCompile`.
-- `Constructed.Minecraft` runtime assembly compiled successfully against the core compile-check assembly.
-- EditMode test source compiled successfully against the core and Minecraft compile-check assemblies plus Unity's bundled NUnit assembly.
-- Full Unity Test Runner execution was not run because active Unity processes are already attached to this project. Run the tests from the open editor's Test Runner, or close Unity and rerun batchmode.
-
-Out of scope:
-
-- No chunks, sections, scheduled ticks, random ticks, block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
-
-### Step 1.6 - Scheduled Block Ticks
-
-Status: Complete
-
-Approved scope:
-
-- Add a minimal scheduled block tick queue to `BlockWorld`.
-- Track deterministic world tick time and execute due scheduled block ticks in stable order.
-- Add `hasScheduled`-style duplicate checks for position plus block id.
-- Add focused EditMode tests.
-
-Reference findings:
-
-- Create uses Minecraft scheduled block ticks as deferred server-side followups in systems such as water wheels, gearshifts, chutes, pipes, tracks, and redstone.
-- Create commonly guards scheduling with `getBlockTicks().hasScheduledTick(pos, block)` before calling `scheduleTick`.
-- Some Create calls pass tick priorities, so the Unity queue includes a minimal priority enum and sorts by trigger tick, priority, then insertion order.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/ScheduledTickPriority.cs`
-- `Assets/Scripts/Constructed.Minecraft/ScheduledTickPriority.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/ScheduledBlockTick.cs`
-- `Assets/Scripts/Constructed.Minecraft/ScheduledBlockTick.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/IBlockLifecycle.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockLifecycle.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
-- `Assets/Tests/EditMode/BlockWorldLifecycleTests.cs`
-- `Assets/Tests/EditMode/BlockWorldScheduledTickTests.cs`
-- `Assets/Tests/EditMode/BlockWorldScheduledTickTests.cs.meta`
-
-Behavior added:
-
-- `BlockWorld` now owns deterministic tick time through `CurrentTick`.
-- `ScheduleBlockTick` schedules block-definition or block-state ticks by position, delay, and priority.
-- `HasScheduledBlockTick` reports pending ticks by position plus scheduled block id.
-- Duplicate pending scheduled ticks for the same position plus block id are ignored.
-- `Tick()` advances one world tick and runs due scheduled block ticks.
-- `Tick(long)` advances multiple world ticks in deterministic one-tick steps.
-- `RunScheduledBlockTicks()` executes currently due ticks without advancing time.
-- Due ticks execute by trigger tick, priority, and insertion order.
-- Scheduled callbacks dispatch through `IBlockLifecycle.OnScheduledTick` only when the current block at the position still matches the scheduled block id.
-- `Clear()` now clears pending scheduled block ticks as well as stored block states.
-
-Verification:
-
-- Unity 6000.4.5f1 batchmode compiled the project successfully and regenerated script assemblies, with `Tundra build success` in `Logs/EditModeTests.log`.
-- Unity batchmode compiled successfully but did not create `EditModeResults.xml`; follow-up found the documented command incorrectly included `-quit`, which can cause Unity to exit before command-line tests run.
-- Fallback verification ran a temporary reflection harness against the Unity-compiled `Constructed.Tests.EditMode.dll`; all 51 reflected NUnit `[Test]` methods passed.
-- Manual Unity Editor Test Runner verification from the open editor showed EditMode passing 51/51 tests with 0 failures.
-
-Out of scope:
-
-- No chunks, chunk tick containers, random ticks, fluid ticks, block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
-
-### Step 1.7 - Minimal Block Entity Foundation
-
-Status: Complete
-
-Approved scope:
-
-- Add minimal per-position block entity runtime objects owned by `BlockWorld`.
-- Add block entity type/factory binding from `BlockDefinition`.
-- Add initialize, tick, lazy-tick, remove/unload, and destroy callbacks.
-- Add behavior composition entry points with typed behavior lookup.
-- Add focused EditMode lifecycle tests.
-
-Reference findings:
-
-- Create's `SmartBlockEntity` initializes on first tick, runs an immediate lazy tick during initialization, and then runs normal ticks plus lazy ticks by a configurable counter.
-- Create block entities own a typed behavior map; behaviors initialize, tick, lazy-tick, observe block/neighbor changes, unload, and destroy through the parent block entity.
-- Create's `IBE.onRemove` destroys a `SmartBlockEntity` when the replacement block no longer preserves a compatible block entity, then removes the block entity from the level.
-- Create registers block entity types separately from blocks and declares valid blocks for each type, which maps cleanly to a Unity `BlockEntityType` factory attached to `BlockDefinition` for now.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityType.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityType.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntity.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntity.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehaviorType.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehaviorType.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehavior.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehavior.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockDefinition.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
-- `Assets/Tests/EditMode/BlockWorldBlockEntityTests.cs`
-- `Assets/Tests/EditMode/BlockWorldBlockEntityTests.cs.meta`
-
-Behavior added:
-
-- `BlockEntityType` owns a resource id and validated factory for creating runtime block entities.
-- `BlockDefinition` can now optionally reference a `BlockEntityType`.
-- `BlockWorld` creates block entities when placing states whose definitions have a block entity type.
-- `BlockWorld` stores block entities by `BlockPos`, supports lookup by position and type, and reports stored block entity count.
-- `BlockWorld.Tick()` now advances time, runs due scheduled block ticks, then ticks current block entities in stable position order.
-- Block entities initialize on their first tick, run an immediate lazy tick during initialization, then run regular ticks and rate-limited lazy ticks.
-- Replacing a state with another state using the same block entity type preserves the runtime block entity and notifies it and its behaviors of the state change.
-- Removing or replacing with an incompatible block entity type destroys and unloads the previous runtime block entity.
-- Neighbor updates now also notify adjacent block entities and their behaviors.
-- `BlockEntityBehaviorType<T>` and `BlockEntityBehavior` provide typed behavior attachment, lookup, initialization, ticking, lazy ticking, state-change, neighbor-change, destroy, and unload entry points.
-
-Verification:
-
-- Unity 6000.4.5f1 batchmode EditMode tests passed 59/59 with 0 failures.
-- Test output was written to `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml`.
-- Unity logged that it was saving `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
-- Git checkpoint: `d1a48e5` (`Step 1.7 block entity foundation`) pushed to `origin/main`.
-
-Out of scope:
-
-- No block entity serialization/persistence yet.
-- No chunk ownership, chunk load/unload model, random ticks, fluid ticks, entities, items, inventories, recipes, rendering, scenes, placement tools, kinetics, or Create machines.
-
-### Step 1.8 - Block Entity Serialization and World Snapshots
-
-Status: Complete
-
-Approved scope:
-
-- Add minimal block entity serialization hooks.
-- Add behavior serialization hooks that share the parent block entity payload.
-- Add deterministic world snapshots for current tick, stored block states, and block entity payloads.
-- Add world snapshot load/deserialize support through a block definition registry.
-- Add focused EditMode round-trip tests.
-
-Reference findings:
-
-- Create's `SmartBlockEntity.write` writes its own block entity data and then forwards the same `CompoundTag` to all attached behaviors.
-- Create's `SmartBlockEntity.read` reads block entity data and then forwards the same payload to behaviors, with deferred behavior attachment available before behavior reads.
-- Create's `BlockEntityBehaviour` exposes `read`, `write`, and `writeSafe` hooks, so behavior composition is part of serialization rather than a separate side channel.
-- Unity implementation keeps this as deterministic string key/value payloads for now instead of introducing NBT/JSON before a save-file format is chosen.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataValue.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataValue.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityData.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityData.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataBuilder.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityDataBuilder.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/SerializedWorldBlockEntry.cs`
-- `Assets/Scripts/Constructed.Minecraft/SerializedWorldBlockEntry.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/SerializedBlockEntity.cs`
-- `Assets/Scripts/Constructed.Minecraft/SerializedBlockEntity.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/SerializedBlockWorld.cs`
-- `Assets/Scripts/Constructed.Minecraft/SerializedBlockWorld.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntity.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehavior.cs`
-- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
-- `Assets/Tests/EditMode/BlockWorldSerializationTests.cs`
-- `Assets/Tests/EditMode/BlockWorldSerializationTests.cs.meta`
-
-Behavior added:
-
-- `BlockEntityDataValue`, `BlockEntityData`, and `BlockEntityDataBuilder` provide deterministic string key/value payload storage with typed helpers for ints, longs, and booleans.
-- `BlockEntity.SerializeData()` writes block entity data first and then behavior data in attached behavior order.
-- `BlockEntity` and `BlockEntityBehavior` now have protected `OnWrite` and `OnRead` hooks.
-- `SerializedWorldBlockEntry`, `SerializedBlockEntity`, and `SerializedBlockWorld` represent the in-memory snapshot format for current block state storage and block entity payloads.
-- `BlockWorld.Serialize()` returns stored non-air block states and block entities in stable position order.
-- `BlockWorld.Deserialize(...)` and `LoadSnapshot(...)` restore world tick, block states, block entity runtime objects, and block entity payloads from a snapshot using a block registry.
-- Snapshot loading clears existing world contents and unloads previous block entities without dispatching normal placement, removal, neighbor, or tick callbacks.
-- Snapshot loading rejects unknown block ids, duplicate positions, orphan block entity payloads, and block entity type mismatches.
-
-Verification:
-
-- Unity 6000.4.5f1 batchmode EditMode tests passed 63/63 with 0 failures.
-- Test output was written to `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml`.
-- Unity logged that it was saving `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
-- Git checkpoint: `97a29f7` (`Step 1.8 block entity serialization`) pushed to `origin/main`.
-
-Out of scope:
-
-- No JSON/NBT/file save format yet.
-- No scheduled tick serialization, chunk ownership, chunk load/unload persistence, random ticks, fluid ticks, items, inventories, recipes, rendering, scenes, placement tools, networking, kinetics, or Create machines.
-
-### Step 1.9 - Minimal Item Definitions and Immutable Item Stacks
-
-Status: Complete
-
-Approved scope:
-
-- Add minimal item definitions keyed by `ResourceLocation`.
-- Add immutable item stacks with count validation and empty stack representation.
-- Add stack split and merge helpers that return remainders instead of mutating source stacks.
-- Add deterministic item stack serialization through item registry ids.
-- Add focused EditMode tests.
-
-Reference findings:
-
-- Create registers item ids centrally in `AllItems.java`, with most simple items using default stack size and selected items using `stacksTo(1)` or `stacksTo(16)`.
-- Create machinery uses Minecraft `ItemStack` copy, split, and count helpers heavily, but this Unity step intentionally keeps stacks immutable until inventories and transport are introduced.
-
-Implemented files:
-
-- `Assets/Scripts/Constructed.Minecraft/ItemDefinition.cs`
-- `Assets/Scripts/Constructed.Minecraft/ItemDefinition.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/ItemStack.cs`
-- `Assets/Scripts/Constructed.Minecraft/ItemStack.cs.meta`
-- `Assets/Scripts/Constructed.Minecraft/SerializedItemStack.cs`
-- `Assets/Scripts/Constructed.Minecraft/SerializedItemStack.cs.meta`
-- `Assets/Tests/EditMode/ItemDefinitionTests.cs`
-- `Assets/Tests/EditMode/ItemDefinitionTests.cs.meta`
-- `Assets/Tests/EditMode/ItemStackTests.cs`
-- `Assets/Tests/EditMode/ItemStackTests.cs.meta`
-
-Behavior added:
-
-- `ItemDefinition` owns an item id and max stack size, defaulting to 64.
-- `ItemStack.Empty` represents the empty stack; non-empty stacks require a definition and a count within the item's max stack size.
-- `ItemStack.WithCount`, `Split`, and `Merge` return new stacks and preserve source stack immutability.
-- Merge fills available capacity and returns overflow as a remainder stack.
-- `SerializedItemStack` stores item id plus count, with default struct value representing empty.
-- `ItemStack.Deserialize(...)` restores stacks through a `Registry<ItemDefinition>` and rejects unknown item ids.
-
-Verification:
-
-- Unity 6000.4.5f1 batchmode EditMode command exited with code 0.
-- Unity fallback result file `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml` reported 73/73 tests passed with 0 failures.
-- Unity logged that it saved `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
-
-Out of scope:
-
-- No inventories, item entities, dropped item simulation, item components, durability, data components, recipes, JSON/NBT save format, rendering, scenes, placement tools, networking, kinetics, or Create machines.
-
-## Planned Phase Outline
-
-1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
-2. Phase 2 - Minecraft world model: world/chunk storage, block lifecycle, scheduled ticks, block entities.
-3. Phase 3 - Items, inventories, recipes, and data import.
-4. Phase 4 - Minimal Unity presentation layer and debug placement.
-5. Phase 5 - First kinetic showcase slice: creative motor, shaft, cogwheels, gearbox.
-6. Phase 6 - Belts and simple item transport.
-7. Phase 7 - Processing machines and depot/belt processing.
-8. Phase 8 - Logistics basics: funnels, tunnels, filters.
-9. Phase 9 - Larger systems: fluids, contraptions, trains, schematics, progression, multiplayer.
-
-## Next Proposed Step
-
-Discuss and confirm Step 1.10 before implementation. Proposed scope: minimal inventory container and slots using immutable `ItemStack` insertion/extraction helpers, stack limits, stable slot serialization, and focused EditMode tests. Defer item entities, dropped item simulation, recipes, rendering, scenes, networking, and Create machines.
+Discuss and confirm Step 1.11 before implementation: demo content catalog and one-chunk flat surface bootstrap for the first vertical slice. Target: fixed block/item ids for air, flat surface blocks, Item Vault, and demo transfer item; deterministic placement data for the later Unity scene. Defer rendering, kinetics, belts, funnels, recipes, networking, and full chunk streaming.
