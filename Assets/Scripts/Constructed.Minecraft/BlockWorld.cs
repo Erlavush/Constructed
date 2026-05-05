@@ -18,6 +18,7 @@ namespace Constructed.Minecraft
 
         private readonly SimulationClock clock;
         private readonly Dictionary<BlockPos, BlockState> states;
+        private readonly Dictionary<BlockPos, BlockEntity> blockEntities;
         private readonly List<ScheduledBlockTickEntry> scheduledBlockTicks;
         private readonly HashSet<ScheduledBlockTickKey> scheduledBlockTickKeys;
         private long nextScheduledBlockTickOrder;
@@ -35,6 +36,7 @@ namespace Constructed.Minecraft
             AirState = airState;
             clock = new SimulationClock(initialTick);
             states = new Dictionary<BlockPos, BlockState>();
+            blockEntities = new Dictionary<BlockPos, BlockEntity>();
             scheduledBlockTicks = new List<ScheduledBlockTickEntry>();
             scheduledBlockTickKeys = new HashSet<ScheduledBlockTickKey>();
         }
@@ -49,6 +51,11 @@ namespace Constructed.Minecraft
         public int StoredBlockCount
         {
             get { return states.Count; }
+        }
+
+        public int StoredBlockEntityCount
+        {
+            get { return blockEntities.Count; }
         }
 
         public long CurrentTick
@@ -70,6 +77,23 @@ namespace Constructed.Minecraft
         public bool HasStoredBlock(BlockPos position)
         {
             return states.ContainsKey(position);
+        }
+
+        public bool HasBlockEntity(BlockPos position)
+        {
+            return blockEntities.ContainsKey(position);
+        }
+
+        public BlockEntity GetBlockEntity(BlockPos position)
+        {
+            BlockEntity blockEntity;
+            return blockEntities.TryGetValue(position, out blockEntity) ? blockEntity : null;
+        }
+
+        public TBlockEntity GetBlockEntity<TBlockEntity>(BlockPos position)
+            where TBlockEntity : BlockEntity
+        {
+            return GetBlockEntity(position) as TBlockEntity;
         }
 
         public bool IsAir(BlockState state)
@@ -94,6 +118,8 @@ namespace Constructed.Minecraft
                 states.Remove(position);
             else
                 states[position] = next;
+
+            UpdateBlockEntityForStateChange(position, next);
 
             BlockStateChange change = new BlockStateChange(this, position, previous, next);
             DispatchBlockLifecycle(change);
@@ -171,6 +197,7 @@ namespace Constructed.Minecraft
         {
             clock.Advance();
             RunScheduledBlockTicks();
+            RunBlockEntityTicks();
         }
 
         public void Tick(long ticks)
@@ -228,9 +255,40 @@ namespace Constructed.Minecraft
             return executed;
         }
 
+        public int RunBlockEntityTicks()
+        {
+            if (blockEntities.Count == 0)
+                return 0;
+
+            List<BlockEntityTickEntry> tickEntries = new List<BlockEntityTickEntry>(blockEntities.Count);
+            foreach (KeyValuePair<BlockPos, BlockEntity> pair in blockEntities)
+                tickEntries.Add(new BlockEntityTickEntry(pair.Key, pair.Value));
+
+            tickEntries.Sort(CompareBlockEntityTickEntries);
+
+            int executed = 0;
+            foreach (BlockEntityTickEntry tickEntry in tickEntries)
+            {
+                BlockEntity current;
+                if (!blockEntities.TryGetValue(tickEntry.Position, out current))
+                    continue;
+                if (!ReferenceEquals(current, tickEntry.BlockEntity))
+                    continue;
+
+                current.TickFromWorld();
+                executed++;
+            }
+
+            return executed;
+        }
+
         public void Clear()
         {
+            foreach (BlockEntity blockEntity in blockEntities.Values)
+                blockEntity.UnloadFromWorld();
+
             states.Clear();
+            blockEntities.Clear();
             scheduledBlockTicks.Clear();
             scheduledBlockTickKeys.Clear();
             nextScheduledBlockTickOrder = 0;
@@ -259,6 +317,19 @@ namespace Constructed.Minecraft
             return left.Position.Z.CompareTo(right.Position.Z);
         }
 
+        private static int CompareBlockEntityTickEntries(BlockEntityTickEntry left, BlockEntityTickEntry right)
+        {
+            int x = left.Position.X.CompareTo(right.Position.X);
+            if (x != 0)
+                return x;
+
+            int y = left.Position.Y.CompareTo(right.Position.Y);
+            if (y != 0)
+                return y;
+
+            return left.Position.Z.CompareTo(right.Position.Z);
+        }
+
         private static int CompareScheduledBlockTicks(ScheduledBlockTickEntry left, ScheduledBlockTickEntry right)
         {
             int trigger = left.TriggerTick.CompareTo(right.TriggerTick);
@@ -270,6 +341,32 @@ namespace Constructed.Minecraft
                 return priority;
 
             return left.Order.CompareTo(right.Order);
+        }
+
+        private void UpdateBlockEntityForStateChange(BlockPos position, BlockState next)
+        {
+            BlockEntity existing;
+            blockEntities.TryGetValue(position, out existing);
+
+            BlockEntityType nextType = IsAir(next) ? null : next.Definition.BlockEntityType;
+            if (existing != null && ReferenceEquals(existing.Type, nextType))
+            {
+                existing.ChangeStateFromWorld(next);
+                return;
+            }
+
+            if (existing != null)
+            {
+                blockEntities.Remove(position);
+                existing.DestroyFromWorld();
+                existing.UnloadFromWorld();
+            }
+
+            if (nextType == null)
+                return;
+
+            BlockEntity blockEntity = nextType.Create(this, position, next);
+            blockEntities.Add(position, blockEntity);
         }
 
         private void DispatchBlockLifecycle(BlockStateChange change)
@@ -299,7 +396,24 @@ namespace Constructed.Minecraft
                     directionFromChanged.Opposite());
 
                 neighborState.Definition.Lifecycle.OnNeighborChanged(neighborChange);
+
+                BlockEntity neighborBlockEntity = GetBlockEntity(neighborPosition);
+                if (neighborBlockEntity != null)
+                    neighborBlockEntity.NeighborChangedFromWorld(change.Position);
             }
+        }
+
+        private readonly struct BlockEntityTickEntry
+        {
+            public BlockEntityTickEntry(BlockPos position, BlockEntity blockEntity)
+            {
+                Position = position;
+                BlockEntity = blockEntity;
+            }
+
+            public BlockPos Position { get; }
+
+            public BlockEntity BlockEntity { get; }
         }
 
         private readonly struct ScheduledBlockTickKey : IEquatable<ScheduledBlockTickKey>

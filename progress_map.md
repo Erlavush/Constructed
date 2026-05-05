@@ -5,8 +5,8 @@ This file tracks implementation phases, approved steps, completed work, and the 
 ## Current Status
 
 Current phase: Phase 1 - Core Foundations
-Current step: Step 1.6 - Scheduled block ticks
-Status: Complete; waiting for user confirmation before Step 1.7
+Current step: Step 1.7 - Minimal block entity foundation
+Status: Complete; waiting for user confirmation before Step 1.8
 
 ## Recent Maintenance
 
@@ -314,6 +314,64 @@ Out of scope:
 
 - No chunks, chunk tick containers, random ticks, fluid ticks, block entities, entities, items, recipes, rendering, scenes, placement tools, or Create machines.
 
+### Step 1.7 - Minimal Block Entity Foundation
+
+Status: Complete
+
+Approved scope:
+
+- Add minimal per-position block entity runtime objects owned by `BlockWorld`.
+- Add block entity type/factory binding from `BlockDefinition`.
+- Add initialize, tick, lazy-tick, remove/unload, and destroy callbacks.
+- Add behavior composition entry points with typed behavior lookup.
+- Add focused EditMode lifecycle tests.
+
+Reference findings:
+
+- Create's `SmartBlockEntity` initializes on first tick, runs an immediate lazy tick during initialization, and then runs normal ticks plus lazy ticks by a configurable counter.
+- Create block entities own a typed behavior map; behaviors initialize, tick, lazy-tick, observe block/neighbor changes, unload, and destroy through the parent block entity.
+- Create's `IBE.onRemove` destroys a `SmartBlockEntity` when the replacement block no longer preserves a compatible block entity, then removes the block entity from the level.
+- Create registers block entity types separately from blocks and declares valid blocks for each type, which maps cleanly to a Unity `BlockEntityType` factory attached to `BlockDefinition` for now.
+
+Implemented files:
+
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityType.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityType.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntity.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntity.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehaviorType.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehaviorType.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehavior.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockEntityBehavior.cs.meta`
+- `Assets/Scripts/Constructed.Minecraft/BlockDefinition.cs`
+- `Assets/Scripts/Constructed.Minecraft/BlockWorld.cs`
+- `Assets/Tests/EditMode/BlockWorldBlockEntityTests.cs`
+- `Assets/Tests/EditMode/BlockWorldBlockEntityTests.cs.meta`
+
+Behavior added:
+
+- `BlockEntityType` owns a resource id and validated factory for creating runtime block entities.
+- `BlockDefinition` can now optionally reference a `BlockEntityType`.
+- `BlockWorld` creates block entities when placing states whose definitions have a block entity type.
+- `BlockWorld` stores block entities by `BlockPos`, supports lookup by position and type, and reports stored block entity count.
+- `BlockWorld.Tick()` now advances time, runs due scheduled block ticks, then ticks current block entities in stable position order.
+- Block entities initialize on their first tick, run an immediate lazy tick during initialization, then run regular ticks and rate-limited lazy ticks.
+- Replacing a state with another state using the same block entity type preserves the runtime block entity and notifies it and its behaviors of the state change.
+- Removing or replacing with an incompatible block entity type destroys and unloads the previous runtime block entity.
+- Neighbor updates now also notify adjacent block entities and their behaviors.
+- `BlockEntityBehaviorType<T>` and `BlockEntityBehavior` provide typed behavior attachment, lookup, initialization, ticking, lazy ticking, state-change, neighbor-change, destroy, and unload entry points.
+
+Verification:
+
+- Unity 6000.4.5f1 batchmode EditMode tests passed 59/59 with 0 failures.
+- Test output was written to `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml`.
+- Unity logged that it was saving `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
+
+Out of scope:
+
+- No block entity serialization/persistence yet.
+- No chunk ownership, chunk load/unload model, random ticks, fluid ticks, entities, items, inventories, recipes, rendering, scenes, placement tools, kinetics, or Create machines.
+
 ## Planned Phase Outline
 
 1. Phase 1 - Core foundations: ids, grid math, registries, tags, block states, tick basics.
@@ -328,4 +386,4 @@ Out of scope:
 
 ## Next Proposed Step
 
-Discuss and confirm Step 1.7 before implementation. Proposed scope: minimal block entity foundation with per-position runtime objects, initialize/tick/lazy-tick/remove/destroy callbacks, behavior composition entry points, and focused EditMode lifecycle tests. Defer items, inventories, recipes, rendering, scenes, networking, and Create machines.
+Discuss and confirm Step 1.8 before implementation. Proposed scope: minimal block entity serialization hooks and world snapshot save/load for current block states plus block entity payloads, with focused EditMode round-trip tests. Defer items, inventories, recipes, rendering, scenes, networking, chunks, and Create machines.

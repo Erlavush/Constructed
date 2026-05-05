@@ -10,16 +10,35 @@ namespace Constructed.Minecraft
         private readonly List<IStateProperty> properties;
 
         public BlockDefinition(ResourceLocation id)
-            : this(id, Array.Empty<IStateProperty>(), BlockLifecycle.None)
+            : this(id, Array.Empty<IStateProperty>(), BlockLifecycle.None, null)
         {
         }
 
         public BlockDefinition(ResourceLocation id, IEnumerable<IStateProperty> properties)
-            : this(id, properties, BlockLifecycle.None)
+            : this(id, properties, BlockLifecycle.None, null)
+        {
+        }
+
+        public BlockDefinition(ResourceLocation id, BlockEntityType blockEntityType)
+            : this(id, Array.Empty<IStateProperty>(), BlockLifecycle.None, blockEntityType)
+        {
+        }
+
+        public BlockDefinition(ResourceLocation id, IEnumerable<IStateProperty> properties, BlockEntityType blockEntityType)
+            : this(id, properties, BlockLifecycle.None, blockEntityType)
         {
         }
 
         public BlockDefinition(ResourceLocation id, IEnumerable<IStateProperty> properties, IBlockLifecycle lifecycle)
+            : this(id, properties, lifecycle, null)
+        {
+        }
+
+        public BlockDefinition(
+            ResourceLocation id,
+            IEnumerable<IStateProperty> properties,
+            IBlockLifecycle lifecycle,
+            BlockEntityType blockEntityType)
         {
             if (string.IsNullOrEmpty(id.Namespace) || string.IsNullOrEmpty(id.Path))
                 throw new ArgumentException("Block id must be initialized.", nameof(id));
@@ -30,6 +49,7 @@ namespace Constructed.Minecraft
 
             Id = id;
             Lifecycle = lifecycle;
+            BlockEntityType = blockEntityType;
             this.properties = new List<IStateProperty>();
             propertiesByName = new Dictionary<string, IStateProperty>(StringComparer.Ordinal);
 
@@ -45,9 +65,16 @@ namespace Constructed.Minecraft
 
         public IBlockLifecycle Lifecycle { get; }
 
+        public BlockEntityType BlockEntityType { get; }
+
         public IReadOnlyList<IStateProperty> Properties { get; }
 
         public BlockState DefaultState { get; }
+
+        public bool HasBlockEntity
+        {
+            get { return BlockEntityType != null; }
+        }
 
         public bool HasProperty(string name)
         {
