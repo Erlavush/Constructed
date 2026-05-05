@@ -5,9 +5,9 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 ## Current Status
 
 - Phase: Phase 1 - Core Foundations.
-- Latest completed step: Step 1.11 - demo content catalog and one-chunk flat surface bootstrap.
-- Latest verification: Unity batchmode was blocked on 2026-05-06 because another Unity instance had this project open. Fallback compile passed for `Constructed.Core`, `Constructed.Minecraft`, `Constructed.Create`, and `Constructed.Tests.EditMode`.
-- Next proposed step: Step 1.12 - minimal Unity presentation for the flat surface and placeholder vertical-slice blocks.
+- Latest completed step: Step 1.12 - minimal Unity presentation for the flat surface and placeholder vertical-slice blocks.
+- Latest verification: Unity batchmode was blocked on 2026-05-06 because another Unity instance had this project open. Fallback compile passed for `Constructed.Core`, `Constructed.Minecraft`, `Constructed.Create`, `Constructed.Unity`, and `Constructed.Tests.EditMode`.
+- Next proposed step: Step 1.13 - minimal kinetics simulation for creative motor and straight shafts.
 - Approval state: wait for user confirmation before starting the next gameplay/subsystem step.
 
 ## Completed Steps
@@ -25,7 +25,8 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 | 1.8 Block entity serialization | Complete | `BlockEntityData`, behavior read/write hooks, `SerializedBlockWorld`, deterministic world snapshot serialize/load. | Unity EditMode passed 63/63; checkpoint `97a29f7`. |
 | 1.9 Item definitions and stacks | Complete | `ItemDefinition`, immutable `ItemStack`, `SerializedItemStack`, empty stack, count validation, split/merge helpers, registry-based restore. | Unity EditMode passed 73/73; checkpoint `f50c779`. |
 | 1.10 Inventories and Item Vault | Complete | `InventoryContainer`, `SerializedInventorySlot`, `Constructed.Create` assembly, single-block `ItemVaultBlockEntity`, `ItemVaultBlock` definition/factory, 20-slot vault storage, slot serialization through item registries. | Unity EditMode passed 83/83; checkpoint `031af49`. |
-| 1.11 Demo catalog and flat chunk | Complete | `DemoContentCatalog` registers fixed first-slice ids; `DemoVerticalSliceBootstrap` creates a 16x16 flat surface and deterministic placeholder layout for motor, shafts, belt, creative crate, brass funnel, and Item Vault. | Unity blocked by open editor; fallback compile passed; checkpoint pending this turn. |
+| 1.11 Demo catalog and flat chunk | Complete | `DemoContentCatalog` registers fixed first-slice ids; `DemoVerticalSliceBootstrap` creates a 16x16 flat surface and deterministic placeholder layout for motor, shafts, belt, creative crate, brass funnel, and Item Vault. | Unity blocked by open editor; fallback compile passed; checkpoint `40c10a4`. |
+| 1.12 Unity placeholder presentation | Complete | `Constructed.Unity` assembly and `DemoVerticalSlicePresenter`; `SampleScene` now generates the 16x16 grass surface, placeholder motor/shafts/belt/crate/funnel, Item Vault, labels, camera, and light. Supports ignored private grass texture at `Assets/PrivateTemp/Minecraft/grass_block_top.png`, with fallback generated green texture. | Unity blocked by open editor; fallback compile passed; checkpoint pending this turn. |
 
 ## Current Boundaries
 
@@ -43,10 +44,11 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 - Items: Create registers items centrally in `AllItems.java`; most use default stack size, while selected items use `stacksTo(1)` or `stacksTo(16)`. Unity item stacks are intentionally immutable until inventories/transport need mutation boundaries.
 - Item Vault: Create's per-block vault capacity defaults to 20 stacks and full vaults form controller-based multiblocks. Unity currently implements only one block of Item Vault storage; multiblock connectivity, manual restrictions, capabilities, and rendering are deferred.
 - First vertical slice ids now match Create registrations: `create:creative_motor`, `create:shaft`, `create:belt`, `create:creative_crate`, `create:brass_funnel`, `create:item_vault`, and item `create:andesite_alloy`.
+- Private Minecraft grass texture is optional and uncommitted. The presenter looks for `Assets/PrivateTemp/Minecraft/grass_block_top.png` and falls back to a generated placeholder when absent.
 
 ## Not Started Yet
 
-- Item entities, dropped item simulation, item components, durability, recipes, JSON/NBT save files, data import, full chunk streaming, rendering, scenes, input, networking, kinetics, belts, funnels, logistics, processing machines, Item Vault multiblocks, contraptions, trains, fluids, worldgen, tutorials, and multiplayer.
+- Item entities, dropped item simulation, item components, durability, recipes, JSON/NBT save files, data import, full chunk streaming, input, networking, kinetics, belt transport behavior, funnel transfer behavior, logistics, processing machines, Item Vault multiblocks, contraptions, trains, fluids, worldgen, tutorials, and multiplayer.
 
 ## Recent Maintenance
 
@@ -56,4 +58,4 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 
 ## Next Step
 
-Discuss and confirm Step 1.12 before implementation: minimal Unity presentation for the flat surface and placeholder vertical-slice blocks. Target: render the bootstrapped one-chunk layout with simple meshes/materials and a camera for inspection. Defer kinetics, belt transport behavior, funnel transfer behavior, recipes, networking, and full chunk streaming.
+Discuss and confirm Step 1.13 before implementation: minimal kinetics simulation for creative motor and straight shafts. Target: motor emits rotational speed, adjacent shafts along the same axis receive speed, and focused tests prove deterministic propagation. Defer stress, gearboxes, belts moving items, recipes, networking, and full chunk streaming.
