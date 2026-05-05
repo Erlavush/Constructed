@@ -21,6 +21,7 @@ Status: Complete; waiting for user confirmation before Step 1.8
 - `ebc0d50` - `Remove hard-coded Bash path guidance` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 - `22cd4c2` - `Step 1.5 block lifecycle and neighbor updates` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 - `30a3e2f` - `Step 1.6 scheduled block ticks` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
+- `d1a48e5` - `Step 1.7 block entity foundation` pushed to `origin/main` at `https://github.com/Erlavush/Constructed.git`.
 
 ## Phase 0 - Source Research and Project Rules
 
@@ -366,6 +367,7 @@ Verification:
 - Unity 6000.4.5f1 batchmode EditMode tests passed 59/59 with 0 failures.
 - Test output was written to `C:\Users\user\AppData\LocalLow\DefaultCompany\Constructed\TestResults.xml`.
 - Unity logged that it was saving `Temp/EditModeResults.xml`, but no workspace `Temp` results file was present after the run.
+- Git checkpoint: `d1a48e5` (`Step 1.7 block entity foundation`) pushed to `origin/main`.
 
 Out of scope:
 
