@@ -26,6 +26,31 @@ The project is no longer blank. Current implementation is in Phase 1 core founda
 
 Read `progress_map.md` before starting work. It is the source of truth for current phase, completed steps, verification status, and the next proposed step.
 
+## Block And Item Specs
+
+Source-backed per-block and per-item notes live under:
+
+```text
+Z:\Constructed\Docs\Specs\Create
+```
+
+Current first-slice coverage lives under:
+
+```text
+Z:\Constructed\Docs\Specs\Create\Blocks
+Z:\Constructed\Docs\Specs\Create\Items
+```
+
+When implementing or changing gameplay behavior for a covered Create block or item:
+
+1. Read its spec file first.
+2. Treat the spec as the fast behavior contract for this repo.
+3. Use `Ponder Notes` and `Ponder Anchors` as the player-facing usage/teaching reference when they exist; use Java and resource source anchors as the mechanics reference.
+4. If source study changes the understanding, update the spec before or with the gameplay change.
+5. If a needed block or item does not have a spec file yet, create it from the smallest relevant reference set before implementing behavior from memory.
+
+These specs do not replace the underlying Minecraft/Create source. Use them to reduce drift and repeated relearning, then go to the source anchors when deeper implementation detail is required.
+
 ## Reference Source
 
 Official Create repo clone for this Unity project:
