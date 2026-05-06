@@ -1,5 +1,6 @@
 using Constructed.Unity;
 using NUnit.Framework;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Constructed.Tests
@@ -27,6 +28,42 @@ namespace Constructed.Tests
                 Assert.AreEqual(CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count, presenter.SyncedCreateAssetFileCount + presenter.MissingCreateAssetFileCount);
                 Assert.AreEqual(1, presenterObject.transform.childCount);
                 Assert.AreEqual("Generated Demo Layout", presenterObject.transform.GetChild(0).name);
+            }
+            finally
+            {
+                Object.DestroyImmediate(presenterObject);
+                DestroyIfFound("Main Camera");
+                DestroyIfFound("Directional Light");
+            }
+        }
+
+        [Test]
+        public void PresenterUsesPointFilteredCreateTexturesForModelFaces()
+        {
+            GameObject presenterObject = new GameObject("Presenter Texture Test");
+            try
+            {
+                DemoVerticalSlicePresenter presenter = presenterObject.AddComponent<DemoVerticalSlicePresenter>();
+                presenter.Rebuild();
+
+                MeshRenderer[] renderers = presenterObject.GetComponentsInChildren<MeshRenderer>(true);
+                List<Texture2D> createTextures = new List<Texture2D>();
+                foreach (MeshRenderer renderer in renderers)
+                {
+                    Material material = renderer.sharedMaterial;
+                    if (material == null || material.name == null || !material.name.StartsWith("Demo create_texture_"))
+                        continue;
+                    if (material.mainTexture is Texture2D texture)
+                        createTextures.Add(texture);
+                }
+
+                Assert.Greater(createTextures.Count, 0);
+                foreach (Texture2D texture in createTextures)
+                {
+                    Assert.AreEqual(FilterMode.Point, texture.filterMode);
+                    Assert.AreEqual(TextureWrapMode.Clamp, texture.wrapMode);
+                    Assert.AreEqual(0, texture.anisoLevel);
+                }
             }
             finally
             {

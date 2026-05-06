@@ -715,6 +715,17 @@ namespace Constructed.Unity
             return material;
         }
 
+        private static void ConfigureLoadedTexture(Texture2D texture, TextureWrapMode wrapMode)
+        {
+            if (texture == null)
+                throw new ArgumentNullException(nameof(texture));
+
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = wrapMode;
+            texture.anisoLevel = 0;
+            texture.mipMapBias = 0f;
+        }
+
         private Texture2D LoadPrivateGrassTexture()
         {
             if (runtimeGrassTexture != null)
@@ -727,6 +738,7 @@ namespace Constructed.Unity
                 Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
                 if (texture.LoadImage(data))
                 {
+                    ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
                     runtimeGrassTexture = texture;
                     return runtimeGrassTexture;
                 }
@@ -753,6 +765,7 @@ namespace Constructed.Unity
                 Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
                 if (texture.LoadImage(data))
                 {
+                    ConfigureLoadedTexture(texture, TextureWrapMode.Clamp);
                     createTexturesByPath.Add(previewTextureFile.RepositoryRelativePath, texture);
                     return texture;
                 }
