@@ -34,6 +34,24 @@ Official Create repo clone for this Unity project:
 Z:\Constructed\References\Create-mc1.21.1-dev
 ```
 
+Clean local Minecraft and NeoForge reference mirrors for this Unity project:
+
+```text
+Z:\Constructed\References\Minecraft-1.21.1-sources
+Z:\Constructed\References\Minecraft-1.21.1-resources
+Z:\Constructed\References\NeoForge-21.1.219-sources
+Z:\Constructed\References\MDK-1.21.1-NeoGradle
+```
+
+Use these folders as the primary local reference set:
+
+- `Minecraft-1.21.1-sources`: decompiled mapped vanilla source for browsing mechanics and control flow.
+- `Minecraft-1.21.1-resources`: extracted vanilla `assets/minecraft` and `data/minecraft` resources for models, blockstates, textures, recipes, tags, and related data.
+- `NeoForge-21.1.219-sources`: extracted official NeoForge source/resources for API, patches, loaders, hooks, and modding-layer behavior.
+- `MDK-1.21.1-NeoGradle`: local NeoGradle workspace aligned to this project's target versions; use it only when you need the generated task surface, raw jars, mappings, or NeoForm build artifacts behind the clean mirrors above.
+
+All of these reference folders are local-only under ignored `References/`. They are for study and tooling, not for staging or publishing.
+
 Clone details:
 
 ```text
@@ -81,6 +99,14 @@ src/generated/resources/assets/create/models
 ```
 
 Use both `src/main/resources` and `src/generated/resources`; many Create blockstates and item/block model JSON files are generated, while many PNG textures live under main resources.
+
+Secondary runtime evidence is available from the user's Prism instance:
+
+```text
+C:\Users\user\AppData\Roaming\PrismLauncher\instances\1.21.1 Neoforge\minecraft
+```
+
+Use the Prism instance only when exact runtime evidence is needed, such as mod jars, configs, logs, or saves. Do not treat it as the primary source for clean mechanics browsing when the local reference mirrors above already provide source/resources directly.
 
 Do not reread broad source areas for every small task. Pick the smallest relevant reference set for the confirmed step.
 
