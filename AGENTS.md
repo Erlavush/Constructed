@@ -16,11 +16,13 @@ Unity version from `ProjectSettings/ProjectVersion.txt`:
 6000.4.5f1
 ```
 
-The project is no longer blank. Current implementation is in Phase 1 core foundations:
+The project is no longer blank. Current implementation is in Phase 1 core foundations, with Step 2 planned as the visual asset pipeline before deeper Create mechanics:
 
 - `Constructed.Core`: resource ids, grid math, registries, tags, deterministic tick clock.
-- `Constructed.Minecraft`: block definitions, immutable block states, in-memory world storage, lifecycle callbacks, neighbor updates.
-- `Constructed.Tests.EditMode`: focused tests for the current foundation code.
+- `Constructed.Minecraft`: block definitions, immutable block states, in-memory world storage, lifecycle callbacks, neighbor updates, scheduled ticks, block entities, items, and inventories.
+- `Constructed.Create`: first Create content definitions, single-block Item Vault storage, and the first vertical-slice content catalog.
+- `Constructed.Unity`: current placeholder demo presentation for the flat surface and first vertical-slice blocks.
+- `Constructed.Tests.EditMode`: focused tests for the current foundation and demo code.
 
 Read `progress_map.md` before starting work. It is the source of truth for current phase, completed steps, verification status, and the next proposed step.
 
@@ -68,6 +70,17 @@ src/main/java/com/simibubi/create/foundation/blockEntity/SmartBlockEntity.java
 src/main/java/com/simibubi/create/content/kinetics/RotationPropagator.java
 src/main/java/com/simibubi/create/content/kinetics/KineticNetwork.java
 ```
+
+High-value entry points for Step 2 visual assets:
+
+```text
+src/main/resources/assets/create/textures
+src/main/resources/assets/create/models
+src/generated/resources/assets/create/blockstates
+src/generated/resources/assets/create/models
+```
+
+Use both `src/main/resources` and `src/generated/resources`; many Create blockstates and item/block model JSON files are generated, while many PNG textures live under main resources.
 
 Do not reread broad source areas for every small task. Pick the smallest relevant reference set for the confirmed step.
 
@@ -127,19 +140,36 @@ Prefer data-driven definitions and behavior composition over one-off MonoBehavio
 
 ## Implementation Order
 
-Build Minecraft-like foundations before Create machines:
+Build Minecraft-like foundations before Create machines, then make the visuals trustworthy before adding deeper mechanics:
 
 1. Core primitives: `ResourceLocation`, registries, tags, `BlockPos`, `Direction`, `Axis`, deterministic tick clock.
 2. Block model: block definitions, immutable block states, world/chunk storage, neighbor updates, scheduled ticks.
 3. Items and persistence: item definitions, item stacks, inventories, item entities, save/load.
 4. Block entities: lifecycle, behavior composition, typed behavior lookup, serialization, lazy ticks.
-5. Data import: enough Minecraft/Create JSON for blocks, items, tags, recipes, blockstates, models, and textures.
-6. Minimal Unity presentation: block mesh display, item display, debug overlays, selection, placement/removal.
+5. Step 2 visual asset pipeline: private Create asset sync, Minecraft/Create JSON model parsing, texture loading, item previews, state-driven block visuals, and a trusted `SampleScene` visual catalog.
+6. Correct first machine visual slice: creative motor, shafts/pulleys, belt parts, creative crate, brass funnel, and Item Vault placed with correct visual state and attachment rules.
 7. Kinetics: shafts, cogwheels, creative motor, gearbox, propagation, networks, stress.
 8. Belts: belt chain/controller/index/length, kinetic propagation, transported item stacks.
 9. Processing and logistics: recipes, depot/belt processing, funnels, tunnels, filters.
 
 Large systems such as trains, contraptions, fluids, schematic workflows, fake-player deployers, worldgen, tutorials, and multiplayer should wait until the foundations they depend on are stable.
+
+## Step 2 Visual Asset Pipeline
+
+Step 2 exists because Create blocks cannot be represented as generic cubes. The Unity view must first display real Create items/blocks and then let block state and connection state select the correct visual form.
+
+Step 2 should be implemented in small confirmed increments:
+
+1. Private asset sync for a narrow allowlist of Create assets needed by the first slice. Copy only into `Assets/PrivateTemp/Create`, preserving source structure. Never commit copied Create textures, models, blockstates, generated JSON, OBJ/MTL files, sounds, or other assets.
+2. Asset manifest/index for the private copy. It should map `create:*` ids to source-relative files and report missing files clearly, without embedding copied asset contents in committed code.
+3. JSON model reader for the Minecraft/Create model subset needed by the first slice. Cover parent inheritance, texture variable resolution, cube `elements`, faces, UVs, rotations, tint/color hooks as placeholders, and item model display metadata where useful.
+4. Texture loader for private PNG assets with point filtering and transparent texture support. Missing private assets should produce clear placeholder visuals and editor diagnostics, not silent wrong geometry.
+5. Item visual catalog in `SampleScene`. Display selected Create item textures/models one by one before machine assembly: `create:andesite_alloy`, `create:belt_connector`, `create:shaft`, `create:creative_motor`, `create:creative_crate`, `create:brass_funnel`, and `create:item_vault`.
+6. Block visual catalog in `SampleScene`. Display selected blockstates and model variants for `create:shaft`, `create:belt`, `create:creative_motor`, `create:creative_crate`, `create:brass_funnel`, and `create:item_vault`.
+7. Stateful machine visual slice. Use authoritative block states and derived connection state to select visuals. A standalone shaft should not look the same as a shaft/pulley participating in a belt. Belt visuals should distinguish start, middle, end, and pulley states. Funnel and Item Vault visuals should use facing/axis properties.
+8. Verification. Add focused EditMode tests for asset-path resolution, manifest coverage, model JSON parsing, blockstate variant selection, and first-slice visual state selection. Use Unity visual inspection for scene presentation, but keep gameplay simulation tests in plain C#.
+
+Step 2 should not implement full gameplay behavior by itself. It prepares the visual/import layer so later kinetics, belt transport, crate output, funnel transfer, and Item Vault insertion can drive correct visuals instead of placeholder cubes.
 
 ## Private Asset Rule
 
@@ -174,6 +204,21 @@ Keep verification lightweight. If Unity exits successfully from `-runTests`, do 
 If Unity batchmode compiles but does not produce a test results XML, record that exact limitation. A successful script assembly build is not the same as a completed test run.
 
 Use compile-only fallback only when Unity Test Runner is blocked, and record which assemblies/files were checked and why full tests were not run.
+
+Verification cost matters. Do not burn time or tokens on toolchain archaeology for routine fixes.
+
+If it is already obvious that the Unity editor has this project open, do not launch a doomed batchmode test run just to confirm the lock. Skip straight to the bounded fallback below unless the user explicitly wants a fresh batchmode attempt after closing the editor.
+
+If the batchmode run fails because another Unity instance already has the project open:
+
+1. Stop after that first failed batchmode attempt. Do not try `dotnet`, `msbuild`, raw `csc`, Roslyn, or manual reference-hunting unless the user explicitly asks for deeper compiler investigation.
+2. Use at most one cheap fallback:
+   - preferred: inspect the live Unity `Editor.log` for a fresh successful recompile of the touched assemblies after the change
+   - otherwise: report that verification is blocked until the user closes the editor
+3. For narrow runtime or visual fixes, a successful live-editor recompile is sufficient fallback verification. Do not try to reconstruct Unity's compile graph manually.
+4. If the cheap fallback is inconclusive, stop and report the limitation instead of exploring more verification paths.
+
+The goal is one real verification attempt plus one bounded fallback, not an open-ended search for alternate compilers.
 
 For documentation-only changes, do not run Unity tests unless the user explicitly asks. Record the verification as documentation-only review.
 
