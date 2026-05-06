@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Constructed.Core;
@@ -16,15 +17,26 @@ namespace Constructed.Unity
         private const float ItemCatalogStartX = 1.5f;
         private const float ItemCatalogSpacing = 2.15f;
         private const float ItemCatalogCardY = 1.65f;
+        private const float ItemModelPreviewBaseScale = 1.6f;
+
+        private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
+            new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
 
         private readonly Dictionary<string, Material> materialsByKey = new Dictionary<string, Material>();
         private readonly Dictionary<string, Texture2D> createTexturesByPath = new Dictionary<string, Texture2D>();
+        private readonly List<Mesh> runtimeModelMeshes = new List<Mesh>();
         private Texture2D runtimeGrassTexture;
         private Texture2D missingCreateItemTexture;
 
         public int GeneratedBlockCount { get; private set; }
 
         public int GeneratedItemPreviewCount { get; private set; }
+
+        public int GeneratedModelItemPreviewCount { get; private set; }
+
+        public int GeneratedFlatItemPreviewCount { get; private set; }
+
+        public int FailedItemModelPreviewCount { get; private set; }
 
         public int SyncedCreateAssetFileCount { get; private set; }
 
@@ -48,10 +60,12 @@ namespace Constructed.Unity
         public void Rebuild()
         {
             ClearGeneratedObjects();
-            DestroyRuntimeTextures();
-            materialsByKey.Clear();
+            DestroyRuntimeAssets();
             GeneratedBlockCount = 0;
             GeneratedItemPreviewCount = 0;
+            GeneratedModelItemPreviewCount = 0;
+            GeneratedFlatItemPreviewCount = 0;
+            FailedItemModelPreviewCount = 0;
             SyncedCreateAssetFileCount = 0;
             MissingCreateAssetFileCount = 0;
             CopiedCreateAssetFileCount = 0;
@@ -65,6 +79,7 @@ namespace Constructed.Unity
                 MissingCreateAssetFileCount = createAssetSync.MissingPaths.Count;
                 CopiedCreateAssetFileCount = createAssetSync.CopiedPaths.Count;
             }
+            MinecraftModelLoader itemModelLoader = CreatePrivateItemModelLoader();
 
             Transform root = CreateGeneratedRoot();
             Transform worldRoot = CreateChildRoot(root, "World");
@@ -73,7 +88,7 @@ namespace Constructed.Unity
             foreach (WorldBlockEntry entry in world.GetStoredBlocks())
                 CreateBlock(worldRoot, catalog, entry);
 
-            CreateItemCatalog(itemCatalogRoot);
+            CreateItemCatalog(itemCatalogRoot, itemModelLoader);
 
             ConfigureCamera();
             ConfigureLight();
@@ -111,7 +126,7 @@ namespace Constructed.Unity
             GeneratedBlockCount++;
         }
 
-        private void CreateItemCatalog(Transform root)
+        private void CreateItemCatalog(Transform root, MinecraftModelLoader itemModelLoader)
         {
             AddFloatingLabel(root, "Create Item Catalog", new Vector3(8f, 3.65f, ItemCatalogZ), 0.16f);
             AddFloatingLabel(
@@ -122,12 +137,18 @@ namespace Constructed.Unity
 
             for (int i = 0; i < CreateFirstSliceItemVisualCatalog.Entries.Count; i++)
             {
-                CreateItemPreview(root, CreateFirstSliceItemVisualCatalog.Entries[i], i);
+                CreateItemPreview(root, CreateFirstSliceItemVisualCatalog.Entries[i], i, itemModelLoader);
                 GeneratedItemPreviewCount++;
             }
+
+            AddFloatingLabel(
+                root,
+                $"Previews: {GeneratedModelItemPreviewCount} model, {GeneratedFlatItemPreviewCount} flat, {FailedItemModelPreviewCount} fallback errors",
+                new Vector3(8f, 2.55f, ItemCatalogZ),
+                0.11f);
         }
 
-        private void CreateItemPreview(Transform root, CreateItemVisualCatalogEntry entry, int index)
+        private void CreateItemPreview(Transform root, CreateItemVisualCatalogEntry entry, int index, MinecraftModelLoader itemModelLoader)
         {
             float x = ItemCatalogStartX + (index * ItemCatalogSpacing);
             Vector3 pedestalPosition = new Vector3(x, 0.2f, ItemCatalogZ);
@@ -142,18 +163,259 @@ namespace Constructed.Unity
             if (pedestalRenderer != null)
                 pedestalRenderer.sharedMaterial = GetMaterial("item_pedestal", new Color(0.18f, 0.19f, 0.22f));
 
+            GameObject previewRoot = new GameObject(entry.Label);
+            previewRoot.transform.SetParent(root, false);
+            previewRoot.transform.localPosition = cardPosition;
+
+            if (TryCreateModelPreview(previewRoot.transform, entry, itemModelLoader))
+                GeneratedModelItemPreviewCount++;
+            else
+            {
+                CreateFlatItemPreview(previewRoot.transform, entry);
+                GeneratedFlatItemPreviewCount++;
+            }
+
+            AddFloatingLabel(previewRoot.transform, entry.Label, new Vector3(0f, 0.9f, 0f), 0.1f);
+        }
+
+        private void CreateFlatItemPreview(Transform root, CreateItemVisualCatalogEntry entry)
+        {
             GameObject card = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            card.name = entry.Label;
+            card.name = "Card";
             card.transform.SetParent(root, false);
-            card.transform.localPosition = cardPosition;
             card.transform.localScale = new Vector3(1.1f, 1.1f, 0.05f);
             card.transform.localRotation = Quaternion.Euler(12f, 0f, 0f);
 
             Renderer cardRenderer = card.GetComponent<Renderer>();
             if (cardRenderer != null)
                 cardRenderer.sharedMaterial = GetItemPreviewMaterial(entry);
+        }
 
-            AddFloatingLabel(card.transform, entry.Label, new Vector3(0f, 0.9f, 0f), 0.1f);
+        private bool TryCreateModelPreview(Transform root, CreateItemVisualCatalogEntry entry, MinecraftModelLoader itemModelLoader)
+        {
+            if (itemModelLoader == null)
+                return false;
+
+            Transform modelRoot = CreateChildRoot(root, "Model");
+            try
+            {
+                MinecraftResolvedModel model = itemModelLoader.LoadModel(entry.PreviewModelId);
+                if (model.Elements.Count == 0)
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                ApplyItemModelDisplay(modelRoot, model);
+
+                int faceIndex = 0;
+                foreach (MinecraftModelElement element in model.Elements)
+                {
+                    foreach (MinecraftModelFace face in element.Faces.Values)
+                    {
+                        CreateModelFaceObject(modelRoot, model, element, face, faceIndex);
+                        faceIndex++;
+                    }
+                }
+
+                if (faceIndex == 0)
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                FailedItemModelPreviewCount++;
+                DestroyUnityObject(modelRoot.gameObject);
+                return false;
+            }
+        }
+
+        private static void ApplyItemModelDisplay(Transform modelRoot, MinecraftResolvedModel model)
+        {
+            MinecraftModelDisplayTransform display = model.HasGuiDisplay ? model.GuiDisplay : DefaultItemModelDisplay;
+            modelRoot.localPosition = display.Translation / 16f;
+            modelRoot.localRotation = Quaternion.Euler(display.Rotation);
+            modelRoot.localScale = Vector3.Scale(Vector3.one * ItemModelPreviewBaseScale, display.Scale);
+        }
+
+        private void CreateModelFaceObject(
+            Transform root,
+            MinecraftResolvedModel model,
+            MinecraftModelElement element,
+            MinecraftModelFace face,
+            int faceIndex)
+        {
+            GameObject faceObject = new GameObject(GetModelFaceName(element, face, faceIndex));
+            faceObject.transform.SetParent(root, false);
+
+            MeshFilter meshFilter = faceObject.AddComponent<MeshFilter>();
+            MeshRenderer meshRenderer = faceObject.AddComponent<MeshRenderer>();
+            meshFilter.sharedMesh = CreateModelFaceMesh(model, element, face, faceIndex);
+            meshRenderer.sharedMaterial = GetCreateTextureMaterial(face.TextureId);
+        }
+
+        private Mesh CreateModelFaceMesh(
+            MinecraftResolvedModel model,
+            MinecraftModelElement element,
+            MinecraftModelFace face,
+            int faceIndex)
+        {
+            Mesh mesh = new Mesh();
+            mesh.name = "Item Face " + faceIndex;
+            mesh.vertices = CreateModelFaceVertices(element, face.Direction);
+            mesh.uv = CreateModelFaceUvs(face, model.TextureSize);
+            mesh.triangles = CreateDoubleSidedQuadTriangles();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            runtimeModelMeshes.Add(mesh);
+            return mesh;
+        }
+
+        private static Vector3[] CreateModelFaceVertices(MinecraftModelElement element, Direction direction)
+        {
+            Vector3 from = element.From;
+            Vector3 to = element.To;
+            Vector3[] vertices;
+            switch (direction)
+            {
+                case Direction.Down:
+                    vertices = new[]
+                    {
+                        new Vector3(from.x, from.y, from.z),
+                        new Vector3(to.x, from.y, from.z),
+                        new Vector3(to.x, from.y, to.z),
+                        new Vector3(from.x, from.y, to.z)
+                    };
+                    break;
+                case Direction.Up:
+                    vertices = new[]
+                    {
+                        new Vector3(from.x, to.y, to.z),
+                        new Vector3(to.x, to.y, to.z),
+                        new Vector3(to.x, to.y, from.z),
+                        new Vector3(from.x, to.y, from.z)
+                    };
+                    break;
+                case Direction.North:
+                    vertices = new[]
+                    {
+                        new Vector3(from.x, from.y, from.z),
+                        new Vector3(to.x, from.y, from.z),
+                        new Vector3(to.x, to.y, from.z),
+                        new Vector3(from.x, to.y, from.z)
+                    };
+                    break;
+                case Direction.South:
+                    vertices = new[]
+                    {
+                        new Vector3(to.x, from.y, to.z),
+                        new Vector3(from.x, from.y, to.z),
+                        new Vector3(from.x, to.y, to.z),
+                        new Vector3(to.x, to.y, to.z)
+                    };
+                    break;
+                case Direction.West:
+                    vertices = new[]
+                    {
+                        new Vector3(from.x, from.y, from.z),
+                        new Vector3(from.x, from.y, to.z),
+                        new Vector3(from.x, to.y, to.z),
+                        new Vector3(from.x, to.y, from.z)
+                    };
+                    break;
+                case Direction.East:
+                    vertices = new[]
+                    {
+                        new Vector3(to.x, from.y, to.z),
+                        new Vector3(to.x, from.y, from.z),
+                        new Vector3(to.x, to.y, from.z),
+                        new Vector3(to.x, to.y, to.z)
+                    };
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
+            }
+
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                if (element.Rotation != null)
+                    vertices[i] = ApplyElementRotation(vertices[i], element.Rotation);
+
+                vertices[i] = ToItemModelLocalPoint(vertices[i]);
+            }
+
+            return vertices;
+        }
+
+        private static Vector3 ApplyElementRotation(Vector3 point, MinecraftModelElementRotation rotation)
+        {
+            Vector3 axis;
+            switch (rotation.Axis)
+            {
+                case Axis.X:
+                    axis = Vector3.right;
+                    break;
+                case Axis.Y:
+                    axis = Vector3.up;
+                    break;
+                case Axis.Z:
+                    axis = Vector3.forward;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            return rotation.Origin + (Quaternion.AngleAxis(rotation.Angle, axis) * (point - rotation.Origin));
+        }
+
+        private static Vector3 ToItemModelLocalPoint(Vector3 modelPoint)
+        {
+            return (modelPoint / 16f) - (Vector3.one * 0.5f);
+        }
+
+        private static Vector2[] CreateModelFaceUvs(MinecraftModelFace face, Vector2 textureSize)
+        {
+            Vector2[] uvs =
+            {
+                new Vector2(face.Uv.x / textureSize.x, 1f - (face.Uv.w / textureSize.y)),
+                new Vector2(face.Uv.z / textureSize.x, 1f - (face.Uv.w / textureSize.y)),
+                new Vector2(face.Uv.z / textureSize.x, 1f - (face.Uv.y / textureSize.y)),
+                new Vector2(face.Uv.x / textureSize.x, 1f - (face.Uv.y / textureSize.y))
+            };
+
+            for (int step = 0; step < (face.RotationDegrees / 90); step++)
+            {
+                uvs = new[]
+                {
+                    uvs[3],
+                    uvs[0],
+                    uvs[1],
+                    uvs[2]
+                };
+            }
+
+            return uvs;
+        }
+
+        private static int[] CreateDoubleSidedQuadTriangles()
+        {
+            return new[]
+            {
+                0, 1, 2,
+                0, 2, 3,
+                2, 1, 0,
+                3, 2, 0
+            };
+        }
+
+        private static string GetModelFaceName(MinecraftModelElement element, MinecraftModelFace face, int faceIndex)
+        {
+            string elementName = string.IsNullOrEmpty(element.Name) ? "Element" : element.Name;
+            return elementName + " " + face.Direction + " " + faceIndex;
         }
 
         private static Vector3 ToUnityPosition(BlockPos position)
@@ -241,6 +503,21 @@ namespace Constructed.Unity
             return material;
         }
 
+        private Material GetCreateTextureMaterial(ResourceLocation textureId)
+        {
+            string key = "create_texture_" + textureId;
+            Material material;
+            if (materialsByKey.TryGetValue(key, out material))
+                return material;
+
+            material = new Material(FindItemPreviewShader());
+            material.name = "Demo " + key;
+            material.color = Color.white;
+            material.mainTexture = LoadPrivateCreateTexture(textureId);
+            materialsByKey.Add(key, material);
+            return material;
+        }
+
         private Texture2D LoadPrivateGrassTexture()
         {
             if (runtimeGrassTexture != null)
@@ -289,6 +566,16 @@ namespace Constructed.Unity
             Texture2D missingTexture = GetMissingCreateItemTexture();
             createTexturesByPath.Add(previewTextureFile.RepositoryRelativePath, missingTexture);
             return missingTexture;
+        }
+
+        private Texture2D LoadPrivateCreateTexture(ResourceLocation textureId)
+        {
+            if (textureId.Namespace != "create")
+                return GetMissingCreateItemTexture();
+
+            return LoadPrivateCreateTexture(
+                new CreatePrivateAssetFileReference(
+                    CreatePrivateAssetFileReference.MainResourcesPrefix + "textures/" + textureId.Path + ".png"));
         }
 
         private Texture2D GetMissingCreateItemTexture()
@@ -476,6 +763,15 @@ namespace Constructed.Unity
                 privateCreateAssetRoot);
         }
 
+        private MinecraftModelLoader CreatePrivateItemModelLoader()
+        {
+            string privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(GetProjectRoot());
+            if (!Directory.Exists(privateCreateAssetRoot))
+                return null;
+
+            return new MinecraftModelLoader(privateCreateAssetRoot);
+        }
+
         private static string[] GetMissingManifestPaths()
         {
             string[] paths = new string[CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count];
@@ -490,8 +786,16 @@ namespace Constructed.Unity
             return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         }
 
-        private void DestroyRuntimeTextures()
+        private void DestroyRuntimeAssets()
         {
+            foreach (Material material in materialsByKey.Values)
+                DestroyUnityObject(material);
+            materialsByKey.Clear();
+
+            foreach (Mesh mesh in runtimeModelMeshes)
+                DestroyUnityObject(mesh);
+            runtimeModelMeshes.Clear();
+
             foreach (Texture2D texture in createTexturesByPath.Values)
             {
                 if (!ReferenceEquals(texture, missingCreateItemTexture))
@@ -499,9 +803,21 @@ namespace Constructed.Unity
             }
 
             createTexturesByPath.Clear();
+
+            if (runtimeGrassTexture != null)
+            {
+                DestroyUnityObject(runtimeGrassTexture);
+                runtimeGrassTexture = null;
+            }
+
+            if (missingCreateItemTexture != null)
+            {
+                DestroyUnityObject(missingCreateItemTexture);
+                missingCreateItemTexture = null;
+            }
         }
 
-        private static void DestroyUnityObject(Object target)
+        private static void DestroyUnityObject(UnityEngine.Object target)
         {
             if (target == null)
                 return;

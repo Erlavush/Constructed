@@ -9,23 +9,29 @@ namespace Constructed.Unity
         public CreateItemVisualCatalogEntry(
             ResourceLocation itemId,
             string label,
+            ResourceLocation previewModelId,
             CreatePrivateAssetFileReference previewTextureFile)
         {
             if (string.IsNullOrEmpty(itemId.Namespace) || string.IsNullOrEmpty(itemId.Path))
                 throw new ArgumentException("Create item catalog id must be initialized.", nameof(itemId));
             if (string.IsNullOrWhiteSpace(label))
                 throw new ArgumentException("Create item catalog label cannot be empty.", nameof(label));
+            if (string.IsNullOrEmpty(previewModelId.Namespace) || string.IsNullOrEmpty(previewModelId.Path))
+                throw new ArgumentException("Create item catalog model id must be initialized.", nameof(previewModelId));
             if (previewTextureFile == null)
                 throw new ArgumentNullException(nameof(previewTextureFile));
 
             ItemId = itemId;
             Label = label;
+            PreviewModelId = previewModelId;
             PreviewTextureFile = previewTextureFile;
         }
 
         public ResourceLocation ItemId { get; }
 
         public string Label { get; }
+
+        public ResourceLocation PreviewModelId { get; }
 
         public CreatePrivateAssetFileReference PreviewTextureFile { get; }
     }
@@ -75,9 +81,11 @@ namespace Constructed.Unity
 
         private static CreateItemVisualCatalogEntry Entry(string itemId, string label, string mainResourceRelativePath)
         {
+            ResourceLocation resourceId = ResourceLocation.Parse(itemId);
             return new CreateItemVisualCatalogEntry(
-                ResourceLocation.Parse(itemId),
+                resourceId,
                 label,
+                new ResourceLocation(resourceId.Namespace, "item/" + resourceId.Path),
                 new CreatePrivateAssetFileReference(CreatePrivateAssetFileReference.MainResourcesPrefix + mainResourceRelativePath));
         }
     }

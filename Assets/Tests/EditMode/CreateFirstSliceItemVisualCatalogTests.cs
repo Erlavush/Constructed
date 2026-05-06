@@ -38,6 +38,13 @@ namespace Constructed.Tests
             }
         }
 
+        [Test]
+        public void EveryItemCatalogPreviewModelIdMatchesTheItemModelPath()
+        {
+            foreach (CreateItemVisualCatalogEntry entry in CreateFirstSliceItemVisualCatalog.Entries)
+                Assert.AreEqual(new ResourceLocation(entry.ItemId.Namespace, "item/" + entry.ItemId.Path), entry.PreviewModelId);
+        }
+
         private static ResourceLocation[] GetItemIds()
         {
             ResourceLocation[] ids = new ResourceLocation[CreateFirstSliceItemVisualCatalog.Entries.Count];
