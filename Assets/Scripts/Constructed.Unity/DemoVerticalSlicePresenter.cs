@@ -12,7 +12,11 @@ namespace Constructed.Unity
     public sealed class DemoVerticalSlicePresenter : MonoBehaviour
     {
         private const string GeneratedRootName = "Generated Demo Layout";
-        private const string PrivateGrassTexturePath = "PrivateTemp/Minecraft/grass_block_top.png";
+        private const string PrivateMinecraftTextureDirectory = "PrivateTemp/Minecraft";
+        private const string PrivateGrassTopTexturePath = PrivateMinecraftTextureDirectory + "/grass_block_top.png";
+        private const string PrivateGrassSideTexturePath = PrivateMinecraftTextureDirectory + "/grass_block_side.png";
+        private const string PrivateDirtTexturePath = PrivateMinecraftTextureDirectory + "/dirt.png";
+        private const string ReferenceMinecraftTextureRoot = "References/Minecraft-1.21.1-resources/assets/minecraft/textures/block";
         private const float ItemCatalogZ = -2.5f;
         private const float ItemCatalogStartX = 1.5f;
         private const float ItemCatalogSpacing = 2.15f;
@@ -30,8 +34,9 @@ namespace Constructed.Unity
 
         private readonly Dictionary<string, Material> materialsByKey = new Dictionary<string, Material>();
         private readonly Dictionary<string, Texture2D> createTexturesByPath = new Dictionary<string, Texture2D>();
+        private readonly Dictionary<string, Texture2D> minecraftTexturesByKey = new Dictionary<string, Texture2D>();
         private readonly List<Mesh> runtimeModelMeshes = new List<Mesh>();
-        private Texture2D runtimeGrassTexture;
+        private Mesh runtimeGrassBlockMesh;
         private Texture2D missingCreateItemTexture;
 
         public int GeneratedBlockCount { get; private set; }
@@ -98,7 +103,7 @@ namespace Constructed.Unity
             Transform blockCatalogRoot = CreateChildRoot(root, "Block Catalog");
 
             foreach (WorldBlockEntry entry in world.GetStoredBlocks())
-                CreateBlock(worldRoot, catalog, entry, modelLoader, blockStateLoader);
+                CreateBlock(worldRoot, catalog, entry, world, modelLoader, blockStateLoader);
 
             CreateItemCatalog(itemCatalogRoot, modelLoader);
             CreateBlockCatalog(blockCatalogRoot, modelLoader, blockStateLoader);
@@ -125,6 +130,7 @@ namespace Constructed.Unity
             Transform root,
             DemoContentCatalog catalog,
             WorldBlockEntry entry,
+            BlockWorld world,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
@@ -135,7 +141,7 @@ namespace Constructed.Unity
                 return;
             }
 
-            CreatePlaceholderWorldBlock(root, catalog, entry);
+            CreatePlaceholderWorldBlock(root, catalog, entry, world);
             GeneratedBlockCount++;
         }
 
@@ -164,8 +170,14 @@ namespace Constructed.Unity
             return true;
         }
 
-        private void CreatePlaceholderWorldBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry)
+        private void CreatePlaceholderWorldBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry, BlockWorld world)
         {
+            if (entry.State.Definition.Id == catalog.Surface.Id)
+            {
+                CreateGrassSurfaceBlock(root, catalog, entry, world);
+                return;
+            }
+
             GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
             block.name = GetDisplayName(catalog, entry);
             block.transform.SetParent(root, false);
@@ -178,6 +190,34 @@ namespace Constructed.Unity
 
             if (entry.State.Definition.Id != catalog.Surface.Id)
                 AddLabel(block.transform, GetLabel(catalog, entry.State));
+        }
+
+        private void CreateGrassSurfaceBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry, BlockWorld world)
+        {
+            bool hasUp = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.Up)));
+            bool hasDown = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.Down)));
+            bool hasNorth = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.North)));
+            bool hasSouth = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.South)));
+            bool hasWest = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.West)));
+            bool hasEast = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.East)));
+
+            Mesh mesh = CreateGrassBlockMeshCulled(hasUp, hasDown, hasNorth, hasSouth, hasWest, hasEast);
+            if (mesh == null)
+                return;
+
+            GameObject block = new GameObject(GetDisplayName(catalog, entry));
+            block.transform.SetParent(root, false);
+            block.transform.localPosition = ToUnityPosition(entry.Position);
+
+            MeshFilter meshFilter = block.AddComponent<MeshFilter>();
+            MeshRenderer meshRenderer = block.AddComponent<MeshRenderer>();
+            meshFilter.sharedMesh = mesh;
+            meshRenderer.sharedMaterials = new[]
+            {
+                GetMaterial("surface_grass_top", Color.white, LoadMinecraftTexture("surface_grass_top", PrivateGrassTopTexturePath, "grass_block_top.png")),
+                GetMaterial("surface_dirt_bottom", Color.white, LoadMinecraftTexture("surface_dirt_bottom", PrivateDirtTexturePath, "dirt.png")),
+                GetMaterial("surface_grass_side", Color.white, LoadMinecraftTexture("surface_grass_side", PrivateGrassSideTexturePath, "grass_block_side.png"))
+            };
         }
 
         private void CreateItemCatalog(Transform root, MinecraftModelLoader itemModelLoader)
@@ -437,6 +477,11 @@ namespace Constructed.Unity
             MeshRenderer meshRenderer = faceObject.AddComponent<MeshRenderer>();
             meshFilter.sharedMesh = CreateModelFaceMesh(model, element, face, faceIndex);
             meshRenderer.sharedMaterial = GetCreateTextureMaterial(face.TextureId);
+            
+            if (face.TextureId.Path == "block/axis")
+            {
+                faceObject.AddComponent<DemoKineticAnimator>();
+            }
         }
 
         private Mesh CreateModelFaceMesh(
@@ -625,7 +670,7 @@ namespace Constructed.Unity
         {
             ResourceLocation id = state.Definition.Id;
             if (id == catalog.Surface.Id)
-                return GetMaterial("surface", new Color(0.34f, 0.66f, 0.25f), LoadPrivateGrassTexture());
+                return GetMaterial("surface_grass_side", Color.white, LoadMinecraftTexture("surface_grass_side", PrivateGrassSideTexturePath, "grass_block_side.png"));
             if (id == catalog.CreativeMotor.Id)
                 return GetMaterial("creative_motor", new Color(0.15f, 0.55f, 0.95f));
             if (id == catalog.Shaft.Id)
@@ -670,7 +715,11 @@ namespace Constructed.Unity
                 return material;
 
             Texture2D texture = LoadPrivateCreateTexture(entry.PreviewTextureFile);
-            material = new Material(FindItemPreviewShader());
+            material = new Material(FindLitShader());
+            material.SetFloat("_AlphaClip", 1);
+            material.SetFloat("_Cutoff", 0.5f);
+            material.EnableKeyword("_ALPHATEST_ON");
+            
             material.name = "Demo " + key;
             material.color = Color.white;
             if (texture != null)
@@ -707,7 +756,11 @@ namespace Constructed.Unity
             if (materialsByKey.TryGetValue(key, out material))
                 return material;
 
-            material = new Material(FindItemPreviewShader());
+            material = new Material(FindLitShader());
+            material.SetFloat("_AlphaClip", 1);
+            material.SetFloat("_Cutoff", 0.5f);
+            material.EnableKeyword("_ALPHATEST_ON");
+            
             material.name = "Demo " + key;
             material.color = Color.white;
             material.mainTexture = LoadPrivateCreateTexture(textureId);
@@ -726,28 +779,44 @@ namespace Constructed.Unity
             texture.mipMapBias = 0f;
         }
 
-        private Texture2D LoadPrivateGrassTexture()
+        private Texture2D LoadMinecraftTexture(string cacheKey, string privateRelativePath, string referenceFileName)
         {
-            if (runtimeGrassTexture != null)
-                return runtimeGrassTexture;
+            Texture2D existingTexture;
+            if (minecraftTexturesByKey.TryGetValue(cacheKey, out existingTexture))
+                return existingTexture;
 
-            string absolutePath = Path.Combine(Application.dataPath, PrivateGrassTexturePath);
-            if (File.Exists(absolutePath))
+            string texturePath = ResolveMinecraftTexturePath(privateRelativePath, referenceFileName);
+            if (texturePath != null)
             {
-                byte[] data = File.ReadAllBytes(absolutePath);
+                byte[] data = File.ReadAllBytes(texturePath);
                 Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
                 if (texture.LoadImage(data))
                 {
                     ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
-                    runtimeGrassTexture = texture;
-                    return runtimeGrassTexture;
+                    texture.name = "Minecraft " + cacheKey;
+                    minecraftTexturesByKey.Add(cacheKey, texture);
+                    return texture;
                 }
 
                 DestroyUnityObject(texture);
             }
 
-            runtimeGrassTexture = CreateFallbackGrassTexture();
-            return runtimeGrassTexture;
+            Texture2D fallbackTexture = cacheKey == "surface_dirt_bottom"
+                ? CreateFallbackDirtTexture()
+                : CreateFallbackGrassTexture();
+            fallbackTexture.name = "Fallback " + cacheKey;
+            minecraftTexturesByKey.Add(cacheKey, fallbackTexture);
+            return fallbackTexture;
+        }
+
+        private static string ResolveMinecraftTexturePath(string privateRelativePath, string referenceFileName)
+        {
+            string privatePath = Path.Combine(Application.dataPath, privateRelativePath);
+            if (File.Exists(privatePath))
+                return privatePath;
+
+            string referencePath = Path.Combine(GetProjectRoot(), ReferenceMinecraftTextureRoot, referenceFileName);
+            return File.Exists(referencePath) ? referencePath : null;
         }
 
         private Texture2D LoadPrivateCreateTexture(CreatePrivateAssetFileReference previewTextureFile)
@@ -808,8 +877,23 @@ namespace Constructed.Unity
                     texture.SetPixel(x, y, ((x + y) % 3 == 0) ? light : dark);
             }
 
-            texture.filterMode = FilterMode.Point;
-            texture.wrapMode = TextureWrapMode.Repeat;
+            ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
+            texture.Apply();
+            return texture;
+        }
+
+        private static Texture2D CreateFallbackDirtTexture()
+        {
+            Texture2D texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            Color dark = new Color(0.33f, 0.23f, 0.12f, 1f);
+            Color light = new Color(0.46f, 0.31f, 0.18f, 1f);
+            for (int y = 0; y < 16; y++)
+            {
+                for (int x = 0; x < 16; x++)
+                    texture.SetPixel(x, y, ((x + (y * 2)) % 5 == 0) ? light : dark);
+            }
+
+            ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
             texture.Apply();
             return texture;
         }
@@ -1005,6 +1089,199 @@ namespace Constructed.Unity
             return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         }
 
+        private Mesh CreateGrassBlockMeshCulled(
+            bool neighborUp,
+            bool neighborDown,
+            bool neighborNorth,
+            bool neighborSouth,
+            bool neighborWest,
+            bool neighborEast)
+        {
+            List<Vector3> vertices = new List<Vector3>();
+            List<Vector3> normals = new List<Vector3>();
+            List<Vector2> uvs = new List<Vector2>();
+            List<int> topTriangles = new List<int>();
+            List<int> bottomTriangles = new List<int>();
+            List<int> sideTriangles = new List<int>();
+
+            // Unity is left-handed: front face = clockwise winding from outside.
+            // Each quad uses {base, base+1, base+2, base, base+2, base+3}.
+
+            // Top face (submesh 0 — grass_top). CW from above.
+            if (!neighborUp)
+            {
+                int b = vertices.Count;
+                vertices.Add(new Vector3(-0.5f, 0.5f, 0.5f));
+                vertices.Add(new Vector3(0.5f, 0.5f, 0.5f));
+                vertices.Add(new Vector3(0.5f, 0.5f, -0.5f));
+                vertices.Add(new Vector3(-0.5f, 0.5f, -0.5f));
+                normals.Add(Vector3.up); normals.Add(Vector3.up); normals.Add(Vector3.up); normals.Add(Vector3.up);
+                uvs.Add(new Vector2(0f, 1f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(1f, 0f)); uvs.Add(new Vector2(0f, 0f));
+                topTriangles.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+
+            // Bottom face (submesh 1 — dirt). CW from below.
+            if (!neighborDown)
+            {
+                int b = vertices.Count;
+                vertices.Add(new Vector3(-0.5f, -0.5f, -0.5f));
+                vertices.Add(new Vector3(0.5f, -0.5f, -0.5f));
+                vertices.Add(new Vector3(0.5f, -0.5f, 0.5f));
+                vertices.Add(new Vector3(-0.5f, -0.5f, 0.5f));
+                normals.Add(Vector3.down); normals.Add(Vector3.down); normals.Add(Vector3.down); normals.Add(Vector3.down);
+                uvs.Add(new Vector2(0f, 0f)); uvs.Add(new Vector2(1f, 0f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(0f, 1f));
+                bottomTriangles.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+
+            // North face -Z (submesh 2 — grass_side). CW from -Z.
+            if (!neighborNorth)
+            {
+                int b = vertices.Count;
+                vertices.Add(new Vector3(0.5f, -0.5f, -0.5f));
+                vertices.Add(new Vector3(-0.5f, -0.5f, -0.5f));
+                vertices.Add(new Vector3(-0.5f, 0.5f, -0.5f));
+                vertices.Add(new Vector3(0.5f, 0.5f, -0.5f));
+                normals.Add(Vector3.back); normals.Add(Vector3.back); normals.Add(Vector3.back); normals.Add(Vector3.back);
+                uvs.Add(new Vector2(0f, 0f)); uvs.Add(new Vector2(1f, 0f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(0f, 1f));
+                sideTriangles.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+
+            // South face +Z (submesh 2 — grass_side). CW from +Z.
+            if (!neighborSouth)
+            {
+                int b = vertices.Count;
+                vertices.Add(new Vector3(-0.5f, -0.5f, 0.5f));
+                vertices.Add(new Vector3(0.5f, -0.5f, 0.5f));
+                vertices.Add(new Vector3(0.5f, 0.5f, 0.5f));
+                vertices.Add(new Vector3(-0.5f, 0.5f, 0.5f));
+                normals.Add(Vector3.forward); normals.Add(Vector3.forward); normals.Add(Vector3.forward); normals.Add(Vector3.forward);
+                uvs.Add(new Vector2(0f, 0f)); uvs.Add(new Vector2(1f, 0f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(0f, 1f));
+                sideTriangles.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+
+            // West face -X (submesh 2 — grass_side). CW from -X.
+            if (!neighborWest)
+            {
+                int b = vertices.Count;
+                vertices.Add(new Vector3(-0.5f, -0.5f, -0.5f));
+                vertices.Add(new Vector3(-0.5f, -0.5f, 0.5f));
+                vertices.Add(new Vector3(-0.5f, 0.5f, 0.5f));
+                vertices.Add(new Vector3(-0.5f, 0.5f, -0.5f));
+                normals.Add(Vector3.left); normals.Add(Vector3.left); normals.Add(Vector3.left); normals.Add(Vector3.left);
+                uvs.Add(new Vector2(0f, 0f)); uvs.Add(new Vector2(1f, 0f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(0f, 1f));
+                sideTriangles.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+
+            // East face +X (submesh 2 — grass_side). CW from +X.
+            if (!neighborEast)
+            {
+                int b = vertices.Count;
+                vertices.Add(new Vector3(0.5f, -0.5f, 0.5f));
+                vertices.Add(new Vector3(0.5f, -0.5f, -0.5f));
+                vertices.Add(new Vector3(0.5f, 0.5f, -0.5f));
+                vertices.Add(new Vector3(0.5f, 0.5f, 0.5f));
+                normals.Add(Vector3.right); normals.Add(Vector3.right); normals.Add(Vector3.right); normals.Add(Vector3.right);
+                uvs.Add(new Vector2(0f, 0f)); uvs.Add(new Vector2(1f, 0f)); uvs.Add(new Vector2(1f, 1f)); uvs.Add(new Vector2(0f, 1f));
+                sideTriangles.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+
+            if (vertices.Count == 0)
+                return null;
+
+            Mesh mesh = new Mesh();
+            mesh.name = "Grass Block Culled";
+            mesh.vertices = vertices.ToArray();
+            mesh.normals = normals.ToArray();
+            mesh.uv = uvs.ToArray();
+            mesh.subMeshCount = 3;
+            mesh.SetTriangles(topTriangles.ToArray(), 0);
+            mesh.SetTriangles(bottomTriangles.ToArray(), 1);
+            mesh.SetTriangles(sideTriangles.ToArray(), 2);
+            mesh.RecalculateBounds();
+            runtimeModelMeshes.Add(mesh);
+            return mesh;
+        }
+
+        private Mesh GetRuntimeGrassBlockMesh()
+        {
+            if (runtimeGrassBlockMesh != null)
+                return runtimeGrassBlockMesh;
+
+            Mesh mesh = new Mesh();
+            mesh.name = "Runtime Grass Block";
+            mesh.vertices = new[]
+            {
+                // Top (CW from above)
+                new Vector3(-0.5f, 0.5f, 0.5f),
+                new Vector3(0.5f, 0.5f, 0.5f),
+                new Vector3(0.5f, 0.5f, -0.5f),
+                new Vector3(-0.5f, 0.5f, -0.5f),
+
+                // Bottom (CW from below)
+                new Vector3(-0.5f, -0.5f, -0.5f),
+                new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(0.5f, -0.5f, 0.5f),
+                new Vector3(-0.5f, -0.5f, 0.5f),
+
+                // North -Z (CW from -Z)
+                new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(-0.5f, -0.5f, -0.5f),
+                new Vector3(-0.5f, 0.5f, -0.5f),
+                new Vector3(0.5f, 0.5f, -0.5f),
+
+                // South +Z (CW from +Z)
+                new Vector3(-0.5f, -0.5f, 0.5f),
+                new Vector3(0.5f, -0.5f, 0.5f),
+                new Vector3(0.5f, 0.5f, 0.5f),
+                new Vector3(-0.5f, 0.5f, 0.5f),
+
+                // West -X (CW from -X)
+                new Vector3(-0.5f, -0.5f, -0.5f),
+                new Vector3(-0.5f, -0.5f, 0.5f),
+                new Vector3(-0.5f, 0.5f, 0.5f),
+                new Vector3(-0.5f, 0.5f, -0.5f),
+
+                // East +X (CW from +X)
+                new Vector3(0.5f, -0.5f, 0.5f),
+                new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(0.5f, 0.5f, -0.5f),
+                new Vector3(0.5f, 0.5f, 0.5f)
+            };
+            mesh.normals = new[]
+            {
+                Vector3.up, Vector3.up, Vector3.up, Vector3.up,
+                Vector3.down, Vector3.down, Vector3.down, Vector3.down,
+                Vector3.back, Vector3.back, Vector3.back, Vector3.back,
+                Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward,
+                Vector3.left, Vector3.left, Vector3.left, Vector3.left,
+                Vector3.right, Vector3.right, Vector3.right, Vector3.right
+            };
+            mesh.uv = new[]
+            {
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f), new Vector2(0f, 0f),
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f)
+            };
+            mesh.subMeshCount = 3;
+            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            mesh.SetTriangles(new[] { 4, 5, 6, 4, 6, 7 }, 1);
+            mesh.SetTriangles(
+                new[]
+                {
+                    8, 9, 10, 8, 10, 11,
+                    12, 13, 14, 12, 14, 15,
+                    16, 17, 18, 16, 18, 19,
+                    20, 21, 22, 20, 22, 23
+                },
+                2);
+            mesh.RecalculateBounds();
+            runtimeGrassBlockMesh = mesh;
+            return runtimeGrassBlockMesh;
+        }
+
         private void DestroyRuntimeAssets()
         {
             foreach (Material material in materialsByKey.Values)
@@ -1023,10 +1300,14 @@ namespace Constructed.Unity
 
             createTexturesByPath.Clear();
 
-            if (runtimeGrassTexture != null)
+            foreach (Texture2D texture in minecraftTexturesByKey.Values)
+                DestroyUnityObject(texture);
+            minecraftTexturesByKey.Clear();
+
+            if (runtimeGrassBlockMesh != null)
             {
-                DestroyUnityObject(runtimeGrassTexture);
-                runtimeGrassTexture = null;
+                DestroyUnityObject(runtimeGrassBlockMesh);
+                runtimeGrassBlockMesh = null;
             }
 
             if (missingCreateItemTexture != null)
