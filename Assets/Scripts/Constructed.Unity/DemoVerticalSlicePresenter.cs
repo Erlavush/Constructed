@@ -17,7 +17,12 @@ namespace Constructed.Unity
         private const float ItemCatalogStartX = 1.5f;
         private const float ItemCatalogSpacing = 2.15f;
         private const float ItemCatalogCardY = 1.65f;
+        private const float BlockCatalogZ = -6.0f;
+        private const float BlockCatalogStartX = 3.0f;
+        private const float BlockCatalogSpacing = 2.6f;
+        private const float BlockCatalogPreviewY = 1.7f;
         private const float ItemModelPreviewBaseScale = 1.6f;
+        private const float BlockModelPreviewBaseScale = 1.15f;
 
         private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
             new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
@@ -32,11 +37,15 @@ namespace Constructed.Unity
 
         public int GeneratedItemPreviewCount { get; private set; }
 
+        public int GeneratedBlockCatalogPreviewCount { get; private set; }
+
         public int GeneratedModelItemPreviewCount { get; private set; }
 
         public int GeneratedFlatItemPreviewCount { get; private set; }
 
         public int FailedItemModelPreviewCount { get; private set; }
+
+        public int FailedBlockCatalogPreviewCount { get; private set; }
 
         public int SyncedCreateAssetFileCount { get; private set; }
 
@@ -49,23 +58,17 @@ namespace Constructed.Unity
             Rebuild();
         }
 
-        private void OnValidate()
-        {
-            if (!isActiveAndEnabled)
-                return;
-
-            Rebuild();
-        }
-
         public void Rebuild()
         {
             ClearGeneratedObjects();
             DestroyRuntimeAssets();
             GeneratedBlockCount = 0;
             GeneratedItemPreviewCount = 0;
+            GeneratedBlockCatalogPreviewCount = 0;
             GeneratedModelItemPreviewCount = 0;
             GeneratedFlatItemPreviewCount = 0;
             FailedItemModelPreviewCount = 0;
+            FailedBlockCatalogPreviewCount = 0;
             SyncedCreateAssetFileCount = 0;
             MissingCreateAssetFileCount = 0;
             CopiedCreateAssetFileCount = 0;
@@ -79,16 +82,19 @@ namespace Constructed.Unity
                 MissingCreateAssetFileCount = createAssetSync.MissingPaths.Count;
                 CopiedCreateAssetFileCount = createAssetSync.CopiedPaths.Count;
             }
-            MinecraftModelLoader itemModelLoader = CreatePrivateItemModelLoader();
+            MinecraftModelLoader modelLoader = CreatePrivateModelLoader();
+            MinecraftBlockStateLoader blockStateLoader = CreatePrivateBlockStateLoader();
 
             Transform root = CreateGeneratedRoot();
             Transform worldRoot = CreateChildRoot(root, "World");
             Transform itemCatalogRoot = CreateChildRoot(root, "Item Catalog");
+            Transform blockCatalogRoot = CreateChildRoot(root, "Block Catalog");
 
             foreach (WorldBlockEntry entry in world.GetStoredBlocks())
                 CreateBlock(worldRoot, catalog, entry);
 
-            CreateItemCatalog(itemCatalogRoot, itemModelLoader);
+            CreateItemCatalog(itemCatalogRoot, modelLoader);
+            CreateBlockCatalog(blockCatalogRoot, modelLoader, blockStateLoader);
 
             ConfigureCamera();
             ConfigureLight();
@@ -148,6 +154,31 @@ namespace Constructed.Unity
                 0.11f);
         }
 
+        private void CreateBlockCatalog(
+            Transform root,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            AddFloatingLabel(root, "Create Block Catalog", new Vector3(8f, 3.65f, BlockCatalogZ), 0.16f);
+            AddFloatingLabel(
+                root,
+                "Blockstate variants: shaft, creative motor, creative crate, brass funnel, item vault",
+                new Vector3(8f, 3.1f, BlockCatalogZ),
+                0.11f);
+
+            for (int i = 0; i < CreateFirstSliceBlockVisualCatalog.Entries.Count; i++)
+            {
+                CreateBlockCatalogPreview(root, CreateFirstSliceBlockVisualCatalog.Entries[i], i, modelLoader, blockStateLoader);
+                GeneratedBlockCatalogPreviewCount++;
+            }
+
+            AddFloatingLabel(
+                root,
+                $"Previews: {GeneratedBlockCatalogPreviewCount} total, {FailedBlockCatalogPreviewCount} fallback errors",
+                new Vector3(8f, 2.55f, BlockCatalogZ),
+                0.11f);
+        }
+
         private void CreateItemPreview(Transform root, CreateItemVisualCatalogEntry entry, int index, MinecraftModelLoader itemModelLoader)
         {
             float x = ItemCatalogStartX + (index * ItemCatalogSpacing);
@@ -176,6 +207,39 @@ namespace Constructed.Unity
             }
 
             AddFloatingLabel(previewRoot.transform, entry.Label, new Vector3(0f, 0.9f, 0f), 0.1f);
+        }
+
+        private void CreateBlockCatalogPreview(
+            Transform root,
+            CreateBlockVisualCatalogEntry entry,
+            int index,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            float x = BlockCatalogStartX + (index * BlockCatalogSpacing);
+            Vector3 pedestalPosition = new Vector3(x, 0.2f, BlockCatalogZ);
+            Vector3 previewPosition = new Vector3(x, BlockCatalogPreviewY, BlockCatalogZ);
+
+            GameObject pedestal = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            pedestal.name = entry.Label + " Pedestal";
+            pedestal.transform.SetParent(root, false);
+            pedestal.transform.localPosition = pedestalPosition;
+            pedestal.transform.localScale = new Vector3(1.0f, 0.4f, 1.0f);
+            Renderer pedestalRenderer = pedestal.GetComponent<Renderer>();
+            if (pedestalRenderer != null)
+                pedestalRenderer.sharedMaterial = GetMaterial("block_pedestal", new Color(0.21f, 0.18f, 0.16f));
+
+            GameObject previewRoot = new GameObject(entry.Label);
+            previewRoot.transform.SetParent(root, false);
+            previewRoot.transform.localPosition = previewPosition;
+
+            if (!TryCreateBlockModelPreview(previewRoot.transform, entry, modelLoader, blockStateLoader))
+            {
+                FailedBlockCatalogPreviewCount++;
+                CreateFallbackBlockPreview(previewRoot.transform, entry);
+            }
+
+            AddFloatingLabel(previewRoot.transform, entry.Label, new Vector3(0f, 0.95f, 0f), 0.1f);
         }
 
         private void CreateFlatItemPreview(Transform root, CreateItemVisualCatalogEntry entry)
@@ -234,12 +298,79 @@ namespace Constructed.Unity
             }
         }
 
+        private bool TryCreateBlockModelPreview(
+            Transform root,
+            CreateBlockVisualCatalogEntry entry,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (modelLoader == null || blockStateLoader == null)
+                return false;
+
+            Transform modelRoot = CreateChildRoot(root, "Model");
+            try
+            {
+                MinecraftBlockStateDefinition blockStateDefinition = blockStateLoader.LoadBlockState(entry.BlockId);
+                MinecraftBlockStateVariant variant = blockStateDefinition.ResolveVariant(entry.PreviewProperties);
+                MinecraftResolvedModel model = modelLoader.LoadModel(variant.ModelId);
+                if (model.Elements.Count == 0)
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                ApplyBlockModelDisplay(modelRoot, variant);
+
+                int faceIndex = 0;
+                foreach (MinecraftModelElement element in model.Elements)
+                {
+                    foreach (MinecraftModelFace face in element.Faces.Values)
+                    {
+                        CreateModelFaceObject(modelRoot, model, element, face, faceIndex);
+                        faceIndex++;
+                    }
+                }
+
+                if (faceIndex == 0)
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                DestroyUnityObject(modelRoot.gameObject);
+                return false;
+            }
+        }
+
+        private void CreateFallbackBlockPreview(Transform root, CreateBlockVisualCatalogEntry entry)
+        {
+            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cube.name = "Fallback";
+            cube.transform.SetParent(root, false);
+            cube.transform.localScale = new Vector3(0.95f, 0.95f, 0.95f);
+
+            Renderer renderer = cube.GetComponent<Renderer>();
+            if (renderer != null)
+                renderer.sharedMaterial = GetFallbackBlockMaterial(entry.BlockId);
+        }
+
         private static void ApplyItemModelDisplay(Transform modelRoot, MinecraftResolvedModel model)
         {
             MinecraftModelDisplayTransform display = model.HasGuiDisplay ? model.GuiDisplay : DefaultItemModelDisplay;
             modelRoot.localPosition = display.Translation / 16f;
             modelRoot.localRotation = Quaternion.Euler(display.Rotation);
             modelRoot.localScale = Vector3.Scale(Vector3.one * ItemModelPreviewBaseScale, display.Scale);
+        }
+
+        private static void ApplyBlockModelDisplay(Transform modelRoot, MinecraftBlockStateVariant variant)
+        {
+            modelRoot.localPosition = Vector3.zero;
+            modelRoot.localRotation = Quaternion.Euler(variant.XRotationDegrees, variant.YRotationDegrees, 0f);
+            modelRoot.localScale = Vector3.one * BlockModelPreviewBaseScale;
         }
 
         private void CreateModelFaceObject(
@@ -345,7 +476,7 @@ namespace Constructed.Unity
                 if (element.Rotation != null)
                     vertices[i] = ApplyElementRotation(vertices[i], element.Rotation);
 
-                vertices[i] = ToItemModelLocalPoint(vertices[i]);
+                vertices[i] = ToCatalogModelLocalPoint(vertices[i]);
             }
 
             return vertices;
@@ -372,7 +503,7 @@ namespace Constructed.Unity
             return rotation.Origin + (Quaternion.AngleAxis(rotation.Angle, axis) * (point - rotation.Origin));
         }
 
-        private static Vector3 ToItemModelLocalPoint(Vector3 modelPoint)
+        private static Vector3 ToCatalogModelLocalPoint(Vector3 modelPoint)
         {
             return (modelPoint / 16f) - (Vector3.one * 0.5f);
         }
@@ -501,6 +632,22 @@ namespace Constructed.Unity
 
             materialsByKey.Add(key, material);
             return material;
+        }
+
+        private Material GetFallbackBlockMaterial(ResourceLocation blockId)
+        {
+            if (blockId == ResourceLocation.Parse("create:shaft"))
+                return GetMaterial("block_catalog_shaft", new Color(0.62f, 0.63f, 0.62f));
+            if (blockId == ResourceLocation.Parse("create:creative_motor"))
+                return GetMaterial("block_catalog_creative_motor", new Color(0.15f, 0.55f, 0.95f));
+            if (blockId == ResourceLocation.Parse("create:creative_crate"))
+                return GetMaterial("block_catalog_creative_crate", new Color(0.46f, 0.28f, 0.86f));
+            if (blockId == ResourceLocation.Parse("create:brass_funnel"))
+                return GetMaterial("block_catalog_brass_funnel", new Color(0.82f, 0.58f, 0.22f));
+            if (blockId == ResourceLocation.Parse("create:item_vault"))
+                return GetMaterial("block_catalog_item_vault", new Color(0.58f, 0.45f, 0.36f));
+
+            return GetMaterial("block_catalog_unknown", Color.magenta);
         }
 
         private Material GetCreateTextureMaterial(ResourceLocation textureId)
@@ -763,13 +910,22 @@ namespace Constructed.Unity
                 privateCreateAssetRoot);
         }
 
-        private MinecraftModelLoader CreatePrivateItemModelLoader()
+        private MinecraftModelLoader CreatePrivateModelLoader()
         {
             string privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(GetProjectRoot());
             if (!Directory.Exists(privateCreateAssetRoot))
                 return null;
 
             return new MinecraftModelLoader(privateCreateAssetRoot);
+        }
+
+        private MinecraftBlockStateLoader CreatePrivateBlockStateLoader()
+        {
+            string privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(GetProjectRoot());
+            if (!Directory.Exists(privateCreateAssetRoot))
+                return null;
+
+            return new MinecraftBlockStateLoader(privateCreateAssetRoot);
         }
 
         private static string[] GetMissingManifestPaths()

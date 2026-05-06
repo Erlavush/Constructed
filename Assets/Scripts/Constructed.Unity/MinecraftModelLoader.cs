@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Constructed.Core;
-using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace Constructed.Unity
@@ -299,40 +298,45 @@ namespace Constructed.Unity
 
         private static RawModelDocument ParseModelDocument(ResourceLocation modelId, string absolutePath)
         {
-            JObject root = JObject.Parse(File.ReadAllText(absolutePath));
+            Dictionary<string, object> root = MinecraftJsonParser.ParseObject(File.ReadAllText(absolutePath), absolutePath);
             ResourceLocation? parentId = null;
-            JToken parentToken = root["parent"];
-            if (parentToken != null && parentToken.Type != JTokenType.Null)
-                parentId = ResourceLocation.Parse(parentToken.Value<string>());
+            if (MinecraftJsonParser.TryGetString(root, "parent", out string parentValue))
+                parentId = ResourceLocation.Parse(parentValue);
 
-            Dictionary<string, string> textures = ParseTextureReferences(root["textures"] as JObject);
-            List<ModelElementTemplate> elements = ParseElements(root["elements"] as JArray, absolutePath);
+            Dictionary<string, string> textures = ParseTextureReferences(
+                MinecraftJsonParser.TryGetObject(root, "textures", out Dictionary<string, object> texturesObject) ? texturesObject : null);
+            List<ModelElementTemplate> elements = ParseElements(
+                MinecraftJsonParser.TryGetArray(root, "elements", out List<object> elementsArray) ? elementsArray : null,
+                absolutePath);
             Dictionary<string, MinecraftModelDisplayTransform> displayTransforms =
-                ParseDisplayTransforms(root["display"] as JObject);
-            Vector2? textureSize = ParseTextureSize(root["texture_size"] as JArray, absolutePath);
+                ParseDisplayTransforms(
+                    MinecraftJsonParser.TryGetObject(root, "display", out Dictionary<string, object> displayObject) ? displayObject : null);
+            Vector2? textureSize = ParseTextureSize(
+                MinecraftJsonParser.TryGetArray(root, "texture_size", out List<object> textureSizeArray) ? textureSizeArray : null,
+                absolutePath);
 
             return new RawModelDocument(parentId, textures, elements, displayTransforms, textureSize);
         }
 
-        private static Dictionary<string, string> ParseTextureReferences(JObject texturesObject)
+        private static Dictionary<string, string> ParseTextureReferences(Dictionary<string, object> texturesObject)
         {
             Dictionary<string, string> textures = new Dictionary<string, string>(StringComparer.Ordinal);
             if (texturesObject == null)
                 return textures;
 
-            foreach (JProperty property in texturesObject.Properties())
+            foreach (KeyValuePair<string, object> property in texturesObject)
             {
-                string value = property.Value.Value<string>();
+                string value = MinecraftJsonParser.AsString(property.Value, "textures." + property.Key);
                 if (string.IsNullOrWhiteSpace(value))
                     continue;
 
-                textures[property.Name] = value;
+                textures[property.Key] = value;
             }
 
             return textures;
         }
 
-        private static Vector2? ParseTextureSize(JArray textureSizeArray, string sourcePath)
+        private static Vector2? ParseTextureSize(List<object> textureSizeArray, string sourcePath)
         {
             if (textureSizeArray == null)
                 return null;
@@ -342,68 +346,77 @@ namespace Constructed.Unity
             return new Vector2(ReadFloat(textureSizeArray[0]), ReadFloat(textureSizeArray[1]));
         }
 
-        private static List<ModelElementTemplate> ParseElements(JArray elementsArray, string sourcePath)
+        private static List<ModelElementTemplate> ParseElements(List<object> elementsArray, string sourcePath)
         {
             if (elementsArray == null)
                 return null;
 
             List<ModelElementTemplate> elements = new List<ModelElementTemplate>(elementsArray.Count);
-            foreach (JToken elementToken in elementsArray)
+            foreach (object elementToken in elementsArray)
             {
-                JObject elementObject = elementToken as JObject;
-                if (elementObject == null)
-                    throw new InvalidDataException("Model element entries must be JSON objects in " + sourcePath + ".");
+                Dictionary<string, object> elementObject = MinecraftJsonParser.AsObject(elementToken, sourcePath + " element");
 
-                string name = elementObject["name"] != null ? elementObject["name"].Value<string>() : string.Empty;
+                string name = MinecraftJsonParser.TryGetString(elementObject, "name", out string elementName) ? elementName : string.Empty;
                 Vector3 from = ReadVector3(elementObject["from"], sourcePath, "from");
                 Vector3 to = ReadVector3(elementObject["to"], sourcePath, "to");
-                ModelElementRotationTemplate rotation = ParseElementRotation(elementObject["rotation"] as JObject, sourcePath);
-                Dictionary<Direction, ModelFaceTemplate> faces = ParseFaces(elementObject["faces"] as JObject, sourcePath);
+                ModelElementRotationTemplate rotation = ParseElementRotation(
+                    MinecraftJsonParser.TryGetObject(elementObject, "rotation", out Dictionary<string, object> rotationObject) ? rotationObject : null,
+                    sourcePath);
+                Dictionary<Direction, ModelFaceTemplate> faces = ParseFaces(
+                    MinecraftJsonParser.TryGetObject(elementObject, "faces", out Dictionary<string, object> facesObject) ? facesObject : null,
+                    sourcePath);
                 elements.Add(new ModelElementTemplate(name, from, to, rotation, faces));
             }
 
             return elements;
         }
 
-        private static ModelElementRotationTemplate ParseElementRotation(JObject rotationObject, string sourcePath)
+        private static ModelElementRotationTemplate ParseElementRotation(Dictionary<string, object> rotationObject, string sourcePath)
         {
             if (rotationObject == null)
                 return null;
 
-            string axisValue = rotationObject["axis"] != null ? rotationObject["axis"].Value<string>() : null;
+            string axisValue = MinecraftJsonParser.TryGetString(rotationObject, "axis", out string parsedAxis) ? parsedAxis : null;
             if (string.IsNullOrWhiteSpace(axisValue))
                 throw new InvalidDataException("Model element rotation axis is required in " + sourcePath + ".");
 
+            double angle;
+            bool rescale;
             return new ModelElementRotationTemplate(
                 ReadVector3(rotationObject["origin"], sourcePath, "rotation.origin"),
                 ParseAxis(axisValue, sourcePath),
-                rotationObject["angle"] != null ? ReadFloat(rotationObject["angle"]) : 0f,
-                rotationObject["rescale"] != null && rotationObject["rescale"].Value<bool>());
+                MinecraftJsonParser.TryGetNumber(rotationObject, "angle", out angle) ? (float)angle : 0f,
+                MinecraftJsonParser.TryGetBoolean(rotationObject, "rescale", out rescale) && rescale);
         }
 
-        private static Dictionary<Direction, ModelFaceTemplate> ParseFaces(JObject facesObject, string sourcePath)
+        private static Dictionary<Direction, ModelFaceTemplate> ParseFaces(Dictionary<string, object> facesObject, string sourcePath)
         {
             if (facesObject == null)
                 throw new InvalidDataException("Model elements must define a faces object in " + sourcePath + ".");
 
             Dictionary<Direction, ModelFaceTemplate> faces = new Dictionary<Direction, ModelFaceTemplate>();
-            foreach (JProperty property in facesObject.Properties())
+            foreach (KeyValuePair<string, object> property in facesObject)
             {
-                JObject faceObject = property.Value as JObject;
-                if (faceObject == null)
-                    throw new InvalidDataException("Model face entries must be JSON objects in " + sourcePath + ".");
+                Dictionary<string, object> faceObject = MinecraftJsonParser.AsObject(property.Value, sourcePath + " face " + property.Key);
 
-                Direction direction = ParseDirection(property.Name, sourcePath);
-                string textureReference = faceObject["texture"] != null ? faceObject["texture"].Value<string>() : null;
+                Direction direction = ParseDirection(property.Key, sourcePath);
+                string textureReference = MinecraftJsonParser.TryGetString(faceObject, "texture", out string parsedTextureReference)
+                    ? parsedTextureReference
+                    : null;
                 if (string.IsNullOrWhiteSpace(textureReference))
                     throw new InvalidDataException("Model face texture reference is required for " + direction + " in " + sourcePath + ".");
 
+                int rotationDegrees = MinecraftJsonParser.TryGetNumber(faceObject, "rotation", out double rotationNumber)
+                    ? Convert.ToInt32(rotationNumber)
+                    : 0;
                 faces.Add(
                     direction,
                     new ModelFaceTemplate(
                         direction,
-                        faceObject["uv"] != null ? ReadVector4(faceObject["uv"], sourcePath, "faces." + property.Name + ".uv") : Vector4.zero,
-                        faceObject["rotation"] != null ? ReadInt(faceObject["rotation"]) : 0,
+                        MinecraftJsonParser.TryGetArray(faceObject, "uv", out List<object> uvArray)
+                            ? ReadVector4(uvArray, sourcePath, "faces." + property.Key + ".uv")
+                            : Vector4.zero,
+                        rotationDegrees,
                         textureReference));
             }
 
@@ -413,29 +426,27 @@ namespace Constructed.Unity
             return faces;
         }
 
-        private static Dictionary<string, MinecraftModelDisplayTransform> ParseDisplayTransforms(JObject displayObject)
+        private static Dictionary<string, MinecraftModelDisplayTransform> ParseDisplayTransforms(Dictionary<string, object> displayObject)
         {
             Dictionary<string, MinecraftModelDisplayTransform> transforms = new Dictionary<string, MinecraftModelDisplayTransform>(StringComparer.Ordinal);
             if (displayObject == null)
                 return transforms;
 
-            foreach (JProperty property in displayObject.Properties())
+            foreach (KeyValuePair<string, object> property in displayObject)
             {
-                JObject transformObject = property.Value as JObject;
-                if (transformObject == null)
-                    continue;
+                Dictionary<string, object> transformObject = MinecraftJsonParser.AsObject(property.Value, "display." + property.Key);
 
-                Vector3 rotation = transformObject["rotation"] != null
-                    ? ReadVector3(transformObject["rotation"], string.Empty, "display." + property.Name + ".rotation")
+                Vector3 rotation = MinecraftJsonParser.TryGetArray(transformObject, "rotation", out List<object> rotationArray)
+                    ? ReadVector3(rotationArray, string.Empty, "display." + property.Key + ".rotation")
                     : Vector3.zero;
-                Vector3 translation = transformObject["translation"] != null
-                    ? ReadVector3(transformObject["translation"], string.Empty, "display." + property.Name + ".translation")
+                Vector3 translation = MinecraftJsonParser.TryGetArray(transformObject, "translation", out List<object> translationArray)
+                    ? ReadVector3(translationArray, string.Empty, "display." + property.Key + ".translation")
                     : Vector3.zero;
-                Vector3 scale = transformObject["scale"] != null
-                    ? ReadVector3(transformObject["scale"], string.Empty, "display." + property.Name + ".scale")
+                Vector3 scale = MinecraftJsonParser.TryGetArray(transformObject, "scale", out List<object> scaleArray)
+                    ? ReadVector3(scaleArray, string.Empty, "display." + property.Key + ".scale")
                     : Vector3.one;
 
-                transforms[property.Name] = new MinecraftModelDisplayTransform(rotation, translation, scale);
+                transforms[property.Key] = new MinecraftModelDisplayTransform(rotation, translation, scale);
             }
 
             return transforms;
@@ -559,32 +570,27 @@ namespace Constructed.Unity
             return textureId;
         }
 
-        private static Vector3 ReadVector3(JToken token, string sourcePath, string fieldName)
+        private static Vector3 ReadVector3(object token, string sourcePath, string fieldName)
         {
-            JArray array = token as JArray;
-            if (array == null || array.Count != 3)
+            List<object> array = MinecraftJsonParser.AsArray(token, fieldName);
+            if (array.Count != 3)
                 throw new InvalidDataException("Expected a three-number array for " + fieldName + " in " + sourcePath + ".");
 
             return new Vector3(ReadFloat(array[0]), ReadFloat(array[1]), ReadFloat(array[2]));
         }
 
-        private static Vector4 ReadVector4(JToken token, string sourcePath, string fieldName)
+        private static Vector4 ReadVector4(object token, string sourcePath, string fieldName)
         {
-            JArray array = token as JArray;
-            if (array == null || array.Count != 4)
+            List<object> array = MinecraftJsonParser.AsArray(token, fieldName);
+            if (array.Count != 4)
                 throw new InvalidDataException("Expected a four-number array for " + fieldName + " in " + sourcePath + ".");
 
             return new Vector4(ReadFloat(array[0]), ReadFloat(array[1]), ReadFloat(array[2]), ReadFloat(array[3]));
         }
 
-        private static float ReadFloat(JToken token)
+        private static float ReadFloat(object token)
         {
-            return token.Value<float>();
-        }
-
-        private static int ReadInt(JToken token)
-        {
-            return token.Value<int>();
+            return MinecraftJsonParser.ToFloat(token, "number");
         }
 
         private static Axis ParseAxis(string value, string sourcePath)
