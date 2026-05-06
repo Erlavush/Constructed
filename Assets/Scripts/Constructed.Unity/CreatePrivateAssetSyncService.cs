@@ -4,6 +4,22 @@ using System.IO;
 
 namespace Constructed.Unity
 {
+    public static class CreatePrivateAssetProjectPaths
+    {
+        public const string ReferenceRepositoryRelativePath = "References/Create-mc1.21.1-dev";
+        public const string PrivateCreateAssetRelativePath = "Assets/PrivateTemp/Create";
+
+        public static string GetReferenceRepositoryRoot(string projectRoot)
+        {
+            return CreatePrivateAssetPathResolver.ResolvePath(projectRoot, ReferenceRepositoryRelativePath);
+        }
+
+        public static string GetPrivateCreateAssetRoot(string projectRoot)
+        {
+            return CreatePrivateAssetPathResolver.ResolvePath(projectRoot, PrivateCreateAssetRelativePath);
+        }
+    }
+
     public sealed class CreatePrivateAssetSyncResult
     {
         private readonly List<string> copiedPaths;
@@ -46,6 +62,11 @@ namespace Constructed.Unity
         public IReadOnlyList<string> MissingPaths
         {
             get { return missingPaths; }
+        }
+
+        public int AvailableFileCount
+        {
+            get { return copiedPaths.Count + unchangedPaths.Count; }
         }
     }
 

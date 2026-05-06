@@ -5,9 +5,9 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 ## Current Status
 
 - Phase: Phase 1 foundations with Step 2 visual asset pipeline underway.
-- Latest completed step: Step 2.1 - private Create asset manifest and sync foundation for the first visual slice.
-- Latest verification: Unity batchmode was blocked on 2026-05-06 because another Unity instance had this project open. Compile-only fallback passed for the new `Constructed.Unity` manifest/sync files and `Constructed.Tests.EditMode` manifest tests using Unity's bundled mono/csc against the current script assemblies.
-- Next proposed step: Step 2.2 - use the manifest to sync the first-slice private assets and start the first item visual catalog in `SampleScene`.
+- Latest completed step: Step 2.2 - first private Create item visual catalog in `SampleScene`.
+- Latest verification: Unity batchmode was blocked on 2026-05-06 because another Unity instance had this project open, so no EditMode XML was produced. Compile-only fallback passed for the updated `Constructed.Unity` manifest/sync/catalog/presenter files and the related `Constructed.Tests.EditMode` files using Unity's bundled mono/csc against the current script assemblies. A direct sync execution against the current code resolved all 86/86 allowlisted files with `0` missing (`0` copied, `86` unchanged because the private mirror was already populated).
+- Next proposed step: Step 2.3 - add a narrow Minecraft/Create JSON model reader for the first item catalog models so the catalog can move beyond flat texture cards without touching blockstate-driven visuals yet.
 - Approval state: wait for user confirmation before starting the next gameplay/subsystem step.
 
 ## Completed Steps
@@ -27,7 +27,8 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 | 1.10 Inventories and Item Vault | Complete | `InventoryContainer`, `SerializedInventorySlot`, `Constructed.Create` assembly, single-block `ItemVaultBlockEntity`, `ItemVaultBlock` definition/factory, 20-slot vault storage, slot serialization through item registries. | Unity EditMode passed 83/83; checkpoint `031af49`. |
 | 1.11 Demo catalog and flat chunk | Complete | `DemoContentCatalog` registers fixed first-slice ids; `DemoVerticalSliceBootstrap` creates a 16x16 flat surface and deterministic placeholder layout for motor, shafts, belt, creative crate, brass funnel, and Item Vault. | Unity blocked by open editor; fallback compile passed; checkpoint `40c10a4`. |
 | 1.12 Unity placeholder presentation | Complete | `Constructed.Unity` assembly and `DemoVerticalSlicePresenter`; `SampleScene` now generates the 16x16 grass surface, placeholder motor/shafts/belt/crate/funnel, Item Vault, labels, camera, and light. Supports ignored private grass texture at `Assets/PrivateTemp/Minecraft/grass_block_top.png`, with fallback generated green texture. | Unity blocked by open editor; fallback compile passed; checkpoint `97c60b6`. |
-| 2.1 Private Create asset manifest | Complete | `Constructed.Unity` now defines a first-slice private asset manifest that maps the selected Create item/block ids to concrete `src/main/resources` and `src/generated/resources` files, plus path-safe private copy resolution and allowlist-only sync with missing-file reporting. Focused EditMode tests cover target coverage, manifest path existence, private-root safety, and sync behavior. | Unity blocked by open editor; targeted mono/csc compile fallback passed for the new runtime/test files; checkpoint pending this turn. |
+| 2.1 Private Create asset manifest | Complete | `Constructed.Unity` now defines a first-slice private asset manifest that maps the selected Create item/block ids to concrete `src/main/resources` and `src/generated/resources` files, plus path-safe private copy resolution and allowlist-only sync with missing-file reporting. Focused EditMode tests cover target coverage, manifest path existence, private-root safety, and sync behavior. | Unity blocked by open editor; targeted mono/csc compile fallback passed for the new runtime/test files; checkpoint `d117094`. |
+| 2.2 First item visual catalog | Complete | `SampleScene` presentation now syncs the allowlisted first-slice Create assets into ignored `Assets/PrivateTemp/Create`, reports sync availability counts, and renders a first item catalog for `create:andesite_alloy`, `create:belt_connector`, `create:shaft`, `create:creative_motor`, `create:creative_crate`, `create:brass_funnel`, and `create:item_vault` using private textures with explicit missing-texture fallback visuals. Added a dedicated item catalog definition plus focused EditMode coverage for catalog order, manifest preview coverage, presenter counts, and project path helpers. | Unity blocked by open editor, so no batchmode test XML was produced. Targeted mono/csc compile fallback passed for the updated runtime/test files, and direct sync execution resolved `86/86` allowlisted files with `0` missing; checkpoint pending this turn. |
 
 ## Current Boundaries
 
@@ -52,7 +53,7 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 
 ## Not Started Yet
 
-- Minecraft/Create model JSON importer, item visual catalog, block visual catalog, state-driven Create visuals, item entities, dropped item simulation, item components, durability, recipes, JSON/NBT save files, full chunk streaming, input, networking, kinetics, belt transport behavior, funnel transfer behavior, logistics, processing machines, Item Vault multiblocks, contraptions, trains, fluids, worldgen, tutorials, and multiplayer.
+- Minecraft/Create model JSON importer, block visual catalog, state-driven Create visuals, item entities, dropped item simulation, item components, durability, recipes, JSON/NBT save files, full chunk streaming, input, networking, kinetics, belt transport behavior, funnel transfer behavior, logistics, processing machines, Item Vault multiblocks, contraptions, trains, fluids, worldgen, tutorials, and multiplayer.
 
 ## Recent Maintenance
 
@@ -63,4 +64,4 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 
 ## Next Step
 
-Discuss and confirm Step 2.2 before implementation: use the new first-slice manifest to sync allowlisted Create assets into ignored `Assets/PrivateTemp/Create`, then start the first item visual catalog in `SampleScene` for `create:andesite_alloy`, `create:belt_connector`, `create:shaft`, `create:creative_motor`, `create:creative_crate`, `create:brass_funnel`, and `create:item_vault`. Defer blockstate-driven model parsing, belt connection visuals, kinetics, crate output, and funnel transfer behavior until the item catalog is trusted.
+Discuss and confirm Step 2.3 before implementation: add a narrow Minecraft/Create JSON model reader for the first item catalog models, starting with parent inheritance, texture variable resolution, and the cube-element subset needed by the current first-slice item previews. Defer blockstate variant selection, belt connection visuals, kinetics, crate output, and funnel transfer behavior until the item-model parser is trusted.

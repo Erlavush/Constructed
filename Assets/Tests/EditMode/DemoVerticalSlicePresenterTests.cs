@@ -16,6 +16,8 @@ namespace Constructed.Tests
                 presenter.Rebuild();
 
                 Assert.AreEqual(268, presenter.GeneratedBlockCount);
+                Assert.AreEqual(7, presenter.GeneratedItemPreviewCount);
+                Assert.AreEqual(CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count, presenter.SyncedCreateAssetFileCount + presenter.MissingCreateAssetFileCount);
                 Assert.AreEqual(1, presenterObject.transform.childCount);
                 Assert.AreEqual("Generated Demo Layout", presenterObject.transform.GetChild(0).name);
             }

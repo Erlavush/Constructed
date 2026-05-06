@@ -62,6 +62,20 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void ProjectPathHelperResolvesReferenceAndPrivateRootsFromProjectRoot()
+        {
+            string projectRoot = Path.Combine(Path.GetTempPath(), "ConstructedProjectRoot");
+
+            string referenceRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot);
+            string privateRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
+
+            StringAssert.EndsWith(Path.Combine("References", "Create-mc1.21.1-dev"), referenceRoot);
+            StringAssert.EndsWith(Path.Combine("Assets", "PrivateTemp", "Create"), privateRoot);
+            Assert.IsTrue(CreatePrivateAssetPathResolver.IsPathUnderRoot(projectRoot, referenceRoot));
+            Assert.IsTrue(CreatePrivateAssetPathResolver.IsPathUnderRoot(projectRoot, privateRoot));
+        }
+
+        [Test]
         public void ResolvePathRejectsEscapingRelativePaths()
         {
             string root = Path.Combine(Path.GetTempPath(), "Constructed", "PathSafety");

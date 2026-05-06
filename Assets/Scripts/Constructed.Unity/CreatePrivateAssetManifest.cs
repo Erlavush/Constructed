@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Constructed.Core;
 
 namespace Constructed.Unity
@@ -11,7 +10,7 @@ namespace Constructed.Unity
         Block
     }
 
-    public sealed class CreatePrivateAssetFileReference
+    public sealed class CreatePrivateAssetFileReference : IEquatable<CreatePrivateAssetFileReference>
     {
         public const string MainResourcesPrefix = "src/main/resources/assets/create/";
         public const string GeneratedResourcesPrefix = "src/generated/resources/assets/create/";
@@ -47,6 +46,22 @@ namespace Constructed.Unity
         public override string ToString()
         {
             return RepositoryRelativePath;
+        }
+
+        public bool Equals(CreatePrivateAssetFileReference other)
+        {
+            return !ReferenceEquals(other, null) &&
+                string.Equals(RepositoryRelativePath, other.RepositoryRelativePath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is CreatePrivateAssetFileReference other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.OrdinalIgnoreCase.GetHashCode(RepositoryRelativePath);
         }
     }
 
