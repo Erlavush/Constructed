@@ -23,6 +23,7 @@ namespace Constructed.Unity
         private const float BlockCatalogPreviewY = 1.7f;
         private const float ItemModelPreviewBaseScale = 1.6f;
         private const float BlockModelPreviewBaseScale = 1.15f;
+        private const float WorldBlockModelBaseScale = 1.0f;
 
         private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
             new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
@@ -39,6 +40,8 @@ namespace Constructed.Unity
 
         public int GeneratedBlockCatalogPreviewCount { get; private set; }
 
+        public int GeneratedStateDrivenWorldBlockCount { get; private set; }
+
         public int GeneratedModelItemPreviewCount { get; private set; }
 
         public int GeneratedFlatItemPreviewCount { get; private set; }
@@ -46,6 +49,8 @@ namespace Constructed.Unity
         public int FailedItemModelPreviewCount { get; private set; }
 
         public int FailedBlockCatalogPreviewCount { get; private set; }
+
+        public int FailedStateDrivenWorldBlockCount { get; private set; }
 
         public int SyncedCreateAssetFileCount { get; private set; }
 
@@ -65,10 +70,12 @@ namespace Constructed.Unity
             GeneratedBlockCount = 0;
             GeneratedItemPreviewCount = 0;
             GeneratedBlockCatalogPreviewCount = 0;
+            GeneratedStateDrivenWorldBlockCount = 0;
             GeneratedModelItemPreviewCount = 0;
             GeneratedFlatItemPreviewCount = 0;
             FailedItemModelPreviewCount = 0;
             FailedBlockCatalogPreviewCount = 0;
+            FailedStateDrivenWorldBlockCount = 0;
             SyncedCreateAssetFileCount = 0;
             MissingCreateAssetFileCount = 0;
             CopiedCreateAssetFileCount = 0;
@@ -91,7 +98,7 @@ namespace Constructed.Unity
             Transform blockCatalogRoot = CreateChildRoot(root, "Block Catalog");
 
             foreach (WorldBlockEntry entry in world.GetStoredBlocks())
-                CreateBlock(worldRoot, catalog, entry);
+                CreateBlock(worldRoot, catalog, entry, modelLoader, blockStateLoader);
 
             CreateItemCatalog(itemCatalogRoot, modelLoader);
             CreateBlockCatalog(blockCatalogRoot, modelLoader, blockStateLoader);
@@ -114,7 +121,50 @@ namespace Constructed.Unity
             return root.transform;
         }
 
-        private void CreateBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry)
+        private void CreateBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (TryCreateStateDrivenWorldBlock(root, catalog, entry, modelLoader, blockStateLoader))
+            {
+                GeneratedStateDrivenWorldBlockCount++;
+                GeneratedBlockCount++;
+                return;
+            }
+
+            CreatePlaceholderWorldBlock(root, catalog, entry);
+            GeneratedBlockCount++;
+        }
+
+        private bool TryCreateStateDrivenWorldBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
+                return false;
+
+            GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.transform.SetParent(root, false);
+            blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
+
+            if (!TryCreateBlockModel(blockRoot.transform, entry.State.Definition.Id, visualProperties, WorldBlockModelBaseScale, modelLoader, blockStateLoader))
+            {
+                FailedStateDrivenWorldBlockCount++;
+                DestroyUnityObject(blockRoot);
+                return false;
+            }
+
+            AddLabel(blockRoot.transform, GetLabel(catalog, entry.State));
+            return true;
+        }
+
+        private void CreatePlaceholderWorldBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry)
         {
             GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
             block.name = GetDisplayName(catalog, entry);
@@ -128,8 +178,6 @@ namespace Constructed.Unity
 
             if (entry.State.Definition.Id != catalog.Surface.Id)
                 AddLabel(block.transform, GetLabel(catalog, entry.State));
-
-            GeneratedBlockCount++;
         }
 
         private void CreateItemCatalog(Transform root, MinecraftModelLoader itemModelLoader)
@@ -233,7 +281,7 @@ namespace Constructed.Unity
             previewRoot.transform.SetParent(root, false);
             previewRoot.transform.localPosition = previewPosition;
 
-            if (!TryCreateBlockModelPreview(previewRoot.transform, entry, modelLoader, blockStateLoader))
+            if (!TryCreateBlockModel(previewRoot.transform, entry.BlockId, entry.PreviewProperties, BlockModelPreviewBaseScale, modelLoader, blockStateLoader))
             {
                 FailedBlockCatalogPreviewCount++;
                 CreateFallbackBlockPreview(previewRoot.transform, entry);
@@ -298,9 +346,11 @@ namespace Constructed.Unity
             }
         }
 
-        private bool TryCreateBlockModelPreview(
+        private bool TryCreateBlockModel(
             Transform root,
-            CreateBlockVisualCatalogEntry entry,
+            ResourceLocation blockId,
+            IReadOnlyList<BlockStatePropertyValue> visualProperties,
+            float baseScale,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
@@ -310,8 +360,8 @@ namespace Constructed.Unity
             Transform modelRoot = CreateChildRoot(root, "Model");
             try
             {
-                MinecraftBlockStateDefinition blockStateDefinition = blockStateLoader.LoadBlockState(entry.BlockId);
-                MinecraftBlockStateVariant variant = blockStateDefinition.ResolveVariant(entry.PreviewProperties);
+                MinecraftBlockStateDefinition blockStateDefinition = blockStateLoader.LoadBlockState(blockId);
+                MinecraftBlockStateVariant variant = blockStateDefinition.ResolveVariant(visualProperties);
                 MinecraftResolvedModel model = modelLoader.LoadModel(variant.ModelId);
                 if (model.Elements.Count == 0)
                 {
@@ -319,7 +369,7 @@ namespace Constructed.Unity
                     return false;
                 }
 
-                ApplyBlockModelDisplay(modelRoot, variant);
+                ApplyBlockModelDisplay(modelRoot, variant, baseScale);
 
                 int faceIndex = 0;
                 foreach (MinecraftModelElement element in model.Elements)
@@ -366,11 +416,11 @@ namespace Constructed.Unity
             modelRoot.localScale = Vector3.Scale(Vector3.one * ItemModelPreviewBaseScale, display.Scale);
         }
 
-        private static void ApplyBlockModelDisplay(Transform modelRoot, MinecraftBlockStateVariant variant)
+        private static void ApplyBlockModelDisplay(Transform modelRoot, MinecraftBlockStateVariant variant, float baseScale)
         {
             modelRoot.localPosition = Vector3.zero;
             modelRoot.localRotation = Quaternion.Euler(variant.XRotationDegrees, variant.YRotationDegrees, 0f);
-            modelRoot.localScale = Vector3.one * BlockModelPreviewBaseScale;
+            modelRoot.localScale = Vector3.one * baseScale;
         }
 
         private void CreateModelFaceObject(

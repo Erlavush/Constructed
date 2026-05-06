@@ -18,10 +18,12 @@ namespace Constructed.Tests
                 Assert.AreEqual(268, presenter.GeneratedBlockCount);
                 Assert.AreEqual(7, presenter.GeneratedItemPreviewCount);
                 Assert.AreEqual(5, presenter.GeneratedBlockCatalogPreviewCount);
+                Assert.AreEqual(6, presenter.GeneratedStateDrivenWorldBlockCount);
                 Assert.AreEqual(5, presenter.GeneratedModelItemPreviewCount);
                 Assert.AreEqual(2, presenter.GeneratedFlatItemPreviewCount);
                 Assert.AreEqual(0, presenter.FailedItemModelPreviewCount);
                 Assert.AreEqual(0, presenter.FailedBlockCatalogPreviewCount);
+                Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
                 Assert.AreEqual(CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count, presenter.SyncedCreateAssetFileCount + presenter.MissingCreateAssetFileCount);
                 Assert.AreEqual(1, presenterObject.transform.childCount);
                 Assert.AreEqual("Generated Demo Layout", presenterObject.transform.GetChild(0).name);
