@@ -15,6 +15,7 @@ namespace Constructed.Unity
         private const string PrivateMinecraftTextureDirectory = "PrivateTemp/Minecraft";
         private const string PrivateGrassTopTexturePath = PrivateMinecraftTextureDirectory + "/grass_block_top.png";
         private const string PrivateGrassSideTexturePath = PrivateMinecraftTextureDirectory + "/grass_block_side.png";
+        private const string PrivateGrassSideOverlayTexturePath = PrivateMinecraftTextureDirectory + "/grass_block_side_overlay.png";
         private const string PrivateDirtTexturePath = PrivateMinecraftTextureDirectory + "/dirt.png";
         private const string ReferenceMinecraftTextureRoot = "References/Minecraft-1.21.1-resources/assets/minecraft/textures/block";
         private const float ItemCatalogZ = -2.5f;
@@ -28,14 +29,19 @@ namespace Constructed.Unity
         private const float ItemModelPreviewBaseScale = 1.6f;
         private const float BlockModelPreviewBaseScale = 1.15f;
         private const float WorldBlockModelBaseScale = 1.0f;
+        private const float CreativeMotorDefaultGeneratedSpeedRpm = 16f;
 
         private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
             new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
+        private static readonly Color32 DefaultMinecraftGrassTint = new Color32(124, 189, 107, 255);
+        private static readonly BlockPos CreativeMotorShowcaseCenterPosition = new BlockPos(24, 1, 8);
+        private static readonly ResourceLocation CreativeMotorHalfShaftModelId = ResourceLocation.Parse("create:block/shaft_half");
 
         private readonly Dictionary<string, Material> materialsByKey = new Dictionary<string, Material>();
         private readonly Dictionary<string, Texture2D> createTexturesByPath = new Dictionary<string, Texture2D>();
         private readonly Dictionary<string, Texture2D> minecraftTexturesByKey = new Dictionary<string, Texture2D>();
         private readonly List<Mesh> runtimeModelMeshes = new List<Mesh>();
+        private readonly List<RotatingVisualState> rotatingVisuals = new List<RotatingVisualState>();
         private Mesh runtimeGrassBlockMesh;
         private Texture2D missingCreateItemTexture;
 
@@ -63,9 +69,20 @@ namespace Constructed.Unity
 
         public int CopiedCreateAssetFileCount { get; private set; }
 
+        public int GeneratedCreativeMotorShowcasePlatformBlockCount { get; private set; }
+
+        public int GeneratedCreativeMotorShowcaseMotorCount { get; private set; }
+
+        public int GeneratedCreativeMotorShowcaseAnimatedShaftCount { get; private set; }
+
         private void OnEnable()
         {
             Rebuild();
+        }
+
+        private void Update()
+        {
+            UpdateRotatingVisuals();
         }
 
         public void Rebuild()
@@ -84,6 +101,9 @@ namespace Constructed.Unity
             SyncedCreateAssetFileCount = 0;
             MissingCreateAssetFileCount = 0;
             CopiedCreateAssetFileCount = 0;
+            GeneratedCreativeMotorShowcasePlatformBlockCount = 0;
+            GeneratedCreativeMotorShowcaseMotorCount = 0;
+            GeneratedCreativeMotorShowcaseAnimatedShaftCount = 0;
 
             DemoContentCatalog catalog = DemoContentCatalog.Create();
             BlockWorld world = DemoVerticalSliceBootstrap.CreateVerticalSliceWorld(catalog);
@@ -101,12 +121,14 @@ namespace Constructed.Unity
             Transform worldRoot = CreateChildRoot(root, "World");
             Transform itemCatalogRoot = CreateChildRoot(root, "Item Catalog");
             Transform blockCatalogRoot = CreateChildRoot(root, "Block Catalog");
+            Transform showcaseRoot = CreateChildRoot(root, "Focused Block Showcases");
 
             foreach (WorldBlockEntry entry in world.GetStoredBlocks())
                 CreateBlock(worldRoot, catalog, entry, world, modelLoader, blockStateLoader);
 
             CreateItemCatalog(itemCatalogRoot, modelLoader);
             CreateBlockCatalog(blockCatalogRoot, modelLoader, blockStateLoader);
+            CreateCreativeMotorShowcase(showcaseRoot, catalog, modelLoader, blockStateLoader);
 
             ConfigureCamera();
             ConfigureLight();
@@ -152,6 +174,9 @@ namespace Constructed.Unity
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
+            if (entry.State.Definition.Id == catalog.CreativeMotor.Id)
+                return TryCreateCreativeMotorWorldBlock(root, catalog, entry, modelLoader, blockStateLoader);
+
             if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
                 return false;
 
@@ -194,7 +219,7 @@ namespace Constructed.Unity
 
         private void CreateGrassSurfaceBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry, BlockWorld world)
         {
-            bool hasUp = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.Up)));
+            bool hasUp = ShouldCullGrassTop(catalog, world.GetBlockState(entry.Position.Relative(Direction.Up)));
             bool hasDown = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.Down)));
             bool hasNorth = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.North)));
             bool hasSouth = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.South)));
@@ -214,10 +239,107 @@ namespace Constructed.Unity
             meshFilter.sharedMesh = mesh;
             meshRenderer.sharedMaterials = new[]
             {
-                GetMaterial("surface_grass_top", Color.white, LoadMinecraftTexture("surface_grass_top", PrivateGrassTopTexturePath, "grass_block_top.png")),
+                GetMaterial("surface_grass_top_tinted", Color.white, LoadTintedGrassTopTexture()),
                 GetMaterial("surface_dirt_bottom", Color.white, LoadMinecraftTexture("surface_dirt_bottom", PrivateDirtTexturePath, "dirt.png")),
-                GetMaterial("surface_grass_side", Color.white, LoadMinecraftTexture("surface_grass_side", PrivateGrassSideTexturePath, "grass_block_side.png"))
+                GetMaterial("surface_grass_side_tinted", Color.white, LoadTintedGrassSideTexture())
             };
+        }
+
+        private static bool ShouldCullGrassTop(DemoContentCatalog catalog, BlockState stateAbove)
+        {
+            if (catalog == null)
+                throw new ArgumentNullException(nameof(catalog));
+            if (stateAbove == null)
+                return false;
+
+            ResourceLocation id = stateAbove.Definition.Id;
+            return id == catalog.Surface.Id ||
+                id == catalog.CreativeCrate.Id ||
+                id == catalog.ItemVault.Id;
+        }
+
+        private bool TryCreateCreativeMotorWorldBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            Direction facing = entry.State.Get(DemoContentCatalog.FacingProperty);
+            bool createdShaft;
+            if (!TryCreateCreativeMotorAssembly(
+                    root,
+                    GetDisplayName(catalog, entry),
+                    GetLabel(catalog, entry.State),
+                    ToUnityPosition(entry.Position),
+                    facing,
+                    WorldBlockModelBaseScale,
+                    modelLoader,
+                    blockStateLoader,
+                    true,
+                    out createdShaft))
+            {
+                FailedStateDrivenWorldBlockCount++;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void CreateCreativeMotorShowcase(
+            Transform root,
+            DemoContentCatalog catalog,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            Transform showcaseRoot = CreateChildRoot(root, "Creative Motor Showcase");
+            AddFloatingLabel(
+                showcaseRoot,
+                "Creative Motor Focus",
+                new Vector3(
+                    CreativeMotorShowcaseCenterPosition.X + 0.5f,
+                    CreativeMotorShowcaseCenterPosition.Y + 2.05f,
+                    CreativeMotorShowcaseCenterPosition.Z + 0.5f),
+                0.16f);
+
+            BlockWorld showcaseWorld = new BlockWorld(catalog.Air.DefaultState);
+            for (int x = CreativeMotorShowcaseCenterPosition.X - 1; x <= CreativeMotorShowcaseCenterPosition.X + 1; x++)
+            {
+                for (int z = CreativeMotorShowcaseCenterPosition.Z - 1; z <= CreativeMotorShowcaseCenterPosition.Z + 1; z++)
+                    showcaseWorld.SetBlockState(new BlockPos(x, 0, z), catalog.Surface.DefaultState);
+            }
+
+            BlockState showcaseMotorState =
+                catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.North);
+            showcaseWorld.SetBlockState(CreativeMotorShowcaseCenterPosition, showcaseMotorState);
+
+            for (int x = CreativeMotorShowcaseCenterPosition.X - 1; x <= CreativeMotorShowcaseCenterPosition.X + 1; x++)
+            {
+                for (int z = CreativeMotorShowcaseCenterPosition.Z - 1; z <= CreativeMotorShowcaseCenterPosition.Z + 1; z++)
+                {
+                    WorldBlockEntry grassEntry = new WorldBlockEntry(new BlockPos(x, 0, z), catalog.Surface.DefaultState);
+                    CreateGrassSurfaceBlock(showcaseRoot, catalog, grassEntry, showcaseWorld);
+                    GeneratedCreativeMotorShowcasePlatformBlockCount++;
+                }
+            }
+
+            bool createdShaft;
+            if (TryCreateCreativeMotorAssembly(
+                    showcaseRoot,
+                    "Creative Motor Showcase",
+                    "Creative Motor",
+                    ToUnityPosition(CreativeMotorShowcaseCenterPosition),
+                    Direction.North,
+                    WorldBlockModelBaseScale,
+                    modelLoader,
+                    blockStateLoader,
+                    true,
+                    out createdShaft))
+            {
+                GeneratedCreativeMotorShowcaseMotorCount++;
+                if (createdShaft)
+                    GeneratedCreativeMotorShowcaseAnimatedShaftCount++;
+            }
         }
 
         private void CreateItemCatalog(Transform root, MinecraftModelLoader itemModelLoader)
@@ -436,6 +558,171 @@ namespace Constructed.Unity
             }
         }
 
+        private bool TryCreateCreativeMotorAssembly(
+            Transform root,
+            string name,
+            string label,
+            Vector3 localPosition,
+            Direction facing,
+            float baseScale,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader,
+            bool animateShaft,
+            out bool createdShaft)
+        {
+            createdShaft = false;
+            if (modelLoader == null || blockStateLoader == null)
+                return false;
+
+            GameObject motorRoot = new GameObject(name);
+            motorRoot.transform.SetParent(root, false);
+            motorRoot.transform.localPosition = localPosition;
+
+            BlockStatePropertyValue[] visualProperties =
+            {
+                new BlockStatePropertyValue("facing", DemoContentCatalog.FacingProperty.SerializeValue(facing))
+            };
+
+            if (!TryCreateCombinedBlockModel(
+                    motorRoot.transform,
+                    ResourceLocation.Parse("create:creative_motor"),
+                    visualProperties,
+                    baseScale,
+                    modelLoader,
+                    blockStateLoader))
+            {
+                DestroyUnityObject(motorRoot);
+                return false;
+            }
+
+            createdShaft = TryCreateCreativeMotorHalfShaft(motorRoot.transform, facing, baseScale, modelLoader, animateShaft);
+            AddLabel(motorRoot.transform, label);
+            return true;
+        }
+
+        private bool TryCreateCombinedBlockModel(
+            Transform root,
+            ResourceLocation blockId,
+            IReadOnlyList<BlockStatePropertyValue> visualProperties,
+            float baseScale,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (modelLoader == null || blockStateLoader == null)
+                return false;
+
+            Transform modelRoot = CreateChildRoot(root, "Model");
+            try
+            {
+                MinecraftBlockStateDefinition blockStateDefinition = blockStateLoader.LoadBlockState(blockId);
+                MinecraftBlockStateVariant variant = blockStateDefinition.ResolveVariant(visualProperties);
+                MinecraftResolvedModel model = modelLoader.LoadModel(variant.ModelId);
+                if (model.Elements.Count == 0)
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                ApplyBlockModelDisplay(modelRoot, variant, baseScale);
+                if (!TryCreateCombinedResolvedModel(modelRoot, model))
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                DestroyUnityObject(modelRoot.gameObject);
+                return false;
+            }
+        }
+
+        private bool TryCreateCreativeMotorHalfShaft(
+            Transform root,
+            Direction facing,
+            float baseScale,
+            MinecraftModelLoader modelLoader,
+            bool animate)
+        {
+            try
+            {
+                MinecraftResolvedModel model = modelLoader.LoadModel(CreativeMotorHalfShaftModelId);
+                if (model.Elements.Count == 0)
+                    return false;
+
+                Transform facingRoot = CreateChildRoot(root, "Shaft Half");
+                facingRoot.localRotation = Quaternion.FromToRotation(Vector3.forward, ToUnityDirectionVector(facing));
+                facingRoot.localScale = Vector3.one * baseScale;
+
+                Transform spinRoot = CreateChildRoot(facingRoot, animate ? "Spin" : "Model");
+                if (!TryCreateCombinedResolvedModel(spinRoot, model))
+                {
+                    DestroyUnityObject(facingRoot.gameObject);
+                    return false;
+                }
+
+                if (animate)
+                    rotatingVisuals.Add(new RotatingVisualState(spinRoot, GetCreativeMotorAnimationDegreesPerSecond(facing)));
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private bool TryCreateCombinedResolvedModel(Transform root, MinecraftResolvedModel model)
+        {
+            Dictionary<ResourceLocation, CombinedMeshBuilder> builders =
+                new Dictionary<ResourceLocation, CombinedMeshBuilder>();
+            int faceCount = 0;
+            foreach (MinecraftModelElement element in model.Elements)
+            {
+                foreach (MinecraftModelFace face in element.Faces.Values)
+                {
+                    CombinedMeshBuilder builder;
+                    if (!builders.TryGetValue(face.TextureId, out builder))
+                    {
+                        builder = new CombinedMeshBuilder();
+                        builders.Add(face.TextureId, builder);
+                    }
+
+                    builder.AddQuad(CreateModelFaceVertices(element, face.Direction), CreateModelFaceUvs(face, model.TextureSize));
+                    faceCount++;
+                }
+            }
+
+            if (faceCount == 0)
+                return false;
+
+            foreach (KeyValuePair<ResourceLocation, CombinedMeshBuilder> pair in builders)
+                CreateCombinedMeshObject(root, pair.Key, pair.Value);
+
+            return true;
+        }
+
+        private void CreateCombinedMeshObject(Transform root, ResourceLocation textureId, CombinedMeshBuilder builder)
+        {
+            GameObject meshObject = new GameObject("Combined " + textureId.Path);
+            meshObject.transform.SetParent(root, false);
+
+            MeshFilter meshFilter = meshObject.AddComponent<MeshFilter>();
+            MeshRenderer meshRenderer = meshObject.AddComponent<MeshRenderer>();
+            Mesh mesh = new Mesh();
+            mesh.name = "Combined " + textureId.Path;
+            mesh.vertices = builder.Vertices.ToArray();
+            mesh.uv = builder.Uvs.ToArray();
+            mesh.triangles = builder.Triangles.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            runtimeModelMeshes.Add(mesh);
+            meshFilter.sharedMesh = mesh;
+            meshRenderer.sharedMaterial = GetCreateTextureMaterial(textureId);
+        }
+
         private void CreateFallbackBlockPreview(Transform root, CreateBlockVisualCatalogEntry entry)
         {
             GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -477,11 +764,6 @@ namespace Constructed.Unity
             MeshRenderer meshRenderer = faceObject.AddComponent<MeshRenderer>();
             meshFilter.sharedMesh = CreateModelFaceMesh(model, element, face, faceIndex);
             meshRenderer.sharedMaterial = GetCreateTextureMaterial(face.TextureId);
-            
-            if (face.TextureId.Path == "block/axis")
-            {
-                faceObject.AddComponent<DemoKineticAnimator>();
-            }
         }
 
         private Mesh CreateModelFaceMesh(
@@ -494,7 +776,7 @@ namespace Constructed.Unity
             mesh.name = "Item Face " + faceIndex;
             mesh.vertices = CreateModelFaceVertices(element, face.Direction);
             mesh.uv = CreateModelFaceUvs(face, model.TextureSize);
-            mesh.triangles = CreateDoubleSidedQuadTriangles();
+            mesh.triangles = CreateSingleSidedQuadTriangles();
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             runtimeModelMeshes.Add(mesh);
@@ -529,19 +811,19 @@ namespace Constructed.Unity
                 case Direction.North:
                     vertices = new[]
                     {
-                        new Vector3(from.x, from.y, from.z),
                         new Vector3(to.x, from.y, from.z),
-                        new Vector3(to.x, to.y, from.z),
-                        new Vector3(from.x, to.y, from.z)
+                        new Vector3(from.x, from.y, from.z),
+                        new Vector3(from.x, to.y, from.z),
+                        new Vector3(to.x, to.y, from.z)
                     };
                     break;
                 case Direction.South:
                     vertices = new[]
                     {
-                        new Vector3(to.x, from.y, to.z),
                         new Vector3(from.x, from.y, to.z),
-                        new Vector3(from.x, to.y, to.z),
-                        new Vector3(to.x, to.y, to.z)
+                        new Vector3(to.x, from.y, to.z),
+                        new Vector3(to.x, to.y, to.z),
+                        new Vector3(from.x, to.y, to.z)
                     };
                     break;
                 case Direction.West:
@@ -627,14 +909,12 @@ namespace Constructed.Unity
             return uvs;
         }
 
-        private static int[] CreateDoubleSidedQuadTriangles()
+        private static int[] CreateSingleSidedQuadTriangles()
         {
             return new[]
             {
                 0, 1, 2,
-                0, 2, 3,
-                2, 1, 0,
-                3, 2, 0
+                0, 2, 3
             };
         }
 
@@ -670,7 +950,7 @@ namespace Constructed.Unity
         {
             ResourceLocation id = state.Definition.Id;
             if (id == catalog.Surface.Id)
-                return GetMaterial("surface_grass_side", Color.white, LoadMinecraftTexture("surface_grass_side", PrivateGrassSideTexturePath, "grass_block_side.png"));
+                return GetMaterial("surface_grass_side_tinted", Color.white, LoadTintedGrassSideTexture());
             if (id == catalog.CreativeMotor.Id)
                 return GetMaterial("creative_motor", new Color(0.15f, 0.55f, 0.95f));
             if (id == catalog.Shaft.Id)
@@ -715,11 +995,7 @@ namespace Constructed.Unity
                 return material;
 
             Texture2D texture = LoadPrivateCreateTexture(entry.PreviewTextureFile);
-            material = new Material(FindLitShader());
-            material.SetFloat("_AlphaClip", 1);
-            material.SetFloat("_Cutoff", 0.5f);
-            material.EnableKeyword("_ALPHATEST_ON");
-            
+            material = new Material(FindItemPreviewShader());
             material.name = "Demo " + key;
             material.color = Color.white;
             if (texture != null)
@@ -757,15 +1033,49 @@ namespace Constructed.Unity
                 return material;
 
             material = new Material(FindLitShader());
-            material.SetFloat("_AlphaClip", 1);
-            material.SetFloat("_Cutoff", 0.5f);
-            material.EnableKeyword("_ALPHATEST_ON");
-            
             material.name = "Demo " + key;
-            material.color = Color.white;
-            material.mainTexture = LoadPrivateCreateTexture(textureId);
+            ConfigureCreateModelMaterial(material, LoadPrivateCreateTexture(textureId));
             materialsByKey.Add(key, material);
             return material;
+        }
+
+        private static void ConfigureCreateModelMaterial(Material material, Texture2D texture)
+        {
+            if (material == null)
+                throw new ArgumentNullException(nameof(material));
+
+            material.color = Color.white;
+
+            if (texture != null)
+            {
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Clamp;
+                texture.anisoLevel = 0;
+
+                material.mainTexture = texture;
+                if (material.HasProperty("_BaseMap"))
+                    material.SetTexture("_BaseMap", texture);
+                if (material.HasProperty("_MainTex"))
+                    material.SetTexture("_MainTex", texture);
+            }
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", Color.white);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", Color.white);
+            if (material.HasProperty("_Surface"))
+                material.SetFloat("_Surface", 0f);
+            if (material.HasProperty("_AlphaClip"))
+                material.SetFloat("_AlphaClip", 1f);
+            if (material.HasProperty("_Cutoff"))
+                material.SetFloat("_Cutoff", 0.1f);
+            if (material.HasProperty("_ZWrite"))
+                material.SetFloat("_ZWrite", 1f);
+
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.renderQueue = 2450;
         }
 
         private static void ConfigureLoadedTexture(Texture2D texture, TextureWrapMode wrapMode)
@@ -801,12 +1111,44 @@ namespace Constructed.Unity
                 DestroyUnityObject(texture);
             }
 
-            Texture2D fallbackTexture = cacheKey == "surface_dirt_bottom"
-                ? CreateFallbackDirtTexture()
-                : CreateFallbackGrassTexture();
+            Texture2D fallbackTexture;
+            if (cacheKey == "surface_dirt_bottom")
+                fallbackTexture = CreateFallbackDirtTexture();
+            else if (cacheKey == "surface_grass_side_overlay_source")
+                fallbackTexture = CreateFallbackTransparentTexture();
+            else
+                fallbackTexture = CreateFallbackGrassTexture();
+
             fallbackTexture.name = "Fallback " + cacheKey;
             minecraftTexturesByKey.Add(cacheKey, fallbackTexture);
             return fallbackTexture;
+        }
+
+        private Texture2D LoadTintedGrassTopTexture()
+        {
+            const string outputKey = "surface_grass_top_tinted";
+            Texture2D existingTexture;
+            if (minecraftTexturesByKey.TryGetValue(outputKey, out existingTexture))
+                return existingTexture;
+
+            Texture2D sourceTexture = LoadMinecraftTexture("surface_grass_top_source", PrivateGrassTopTexturePath, "grass_block_top.png");
+            Texture2D tintedTexture = CreateTintedTexture(sourceTexture, DefaultMinecraftGrassTint, outputKey);
+            minecraftTexturesByKey.Add(outputKey, tintedTexture);
+            return tintedTexture;
+        }
+
+        private Texture2D LoadTintedGrassSideTexture()
+        {
+            const string outputKey = "surface_grass_side_tinted";
+            Texture2D existingTexture;
+            if (minecraftTexturesByKey.TryGetValue(outputKey, out existingTexture))
+                return existingTexture;
+
+            Texture2D baseTexture = LoadMinecraftTexture("surface_grass_side_source", PrivateGrassSideTexturePath, "grass_block_side.png");
+            Texture2D overlayTexture = LoadMinecraftTexture("surface_grass_side_overlay_source", PrivateGrassSideOverlayTexturePath, "grass_block_side_overlay.png");
+            Texture2D tintedTexture = CreateTintedOverlayTexture(baseTexture, overlayTexture, DefaultMinecraftGrassTint, outputKey);
+            minecraftTexturesByKey.Add(outputKey, tintedTexture);
+            return tintedTexture;
         }
 
         private static string ResolveMinecraftTexturePath(string privateRelativePath, string referenceFileName)
@@ -882,6 +1224,21 @@ namespace Constructed.Unity
             return texture;
         }
 
+        private static Texture2D CreateFallbackTransparentTexture()
+        {
+            Texture2D texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            Color clear = new Color(0f, 0f, 0f, 0f);
+            for (int y = 0; y < 16; y++)
+            {
+                for (int x = 0; x < 16; x++)
+                    texture.SetPixel(x, y, clear);
+            }
+
+            ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
+            texture.Apply();
+            return texture;
+        }
+
         private static Texture2D CreateFallbackDirtTexture()
         {
             Texture2D texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
@@ -896,6 +1253,69 @@ namespace Constructed.Unity
             ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
             texture.Apply();
             return texture;
+        }
+
+        private static Texture2D CreateTintedTexture(Texture2D sourceTexture, Color32 tint, string outputKey)
+        {
+            Texture2D texture = new Texture2D(sourceTexture.width, sourceTexture.height, TextureFormat.RGBA32, false);
+            Color32[] sourcePixels = sourceTexture.GetPixels32();
+            Color32[] tintedPixels = new Color32[sourcePixels.Length];
+            for (int i = 0; i < sourcePixels.Length; i++)
+            {
+                Color32 sourcePixel = sourcePixels[i];
+                tintedPixels[i] = new Color32(
+                    MultiplyByte(sourcePixel.r, tint.r),
+                    MultiplyByte(sourcePixel.g, tint.g),
+                    MultiplyByte(sourcePixel.b, tint.b),
+                    sourcePixel.a);
+            }
+
+            texture.SetPixels32(tintedPixels);
+            ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
+            texture.name = "Minecraft " + outputKey;
+            texture.Apply();
+            return texture;
+        }
+
+        private static Texture2D CreateTintedOverlayTexture(Texture2D baseTexture, Texture2D overlayTexture, Color32 tint, string outputKey)
+        {
+            Texture2D texture = new Texture2D(baseTexture.width, baseTexture.height, TextureFormat.RGBA32, false);
+            Color32[] basePixels = baseTexture.GetPixels32();
+            Color32[] overlayPixels = overlayTexture.GetPixels32();
+            Color32[] compositePixels = new Color32[basePixels.Length];
+            for (int i = 0; i < basePixels.Length; i++)
+            {
+                Color32 basePixel = basePixels[i];
+                Color32 overlayPixel = overlayPixels[i];
+                byte overlayR = MultiplyByte(overlayPixel.r, tint.r);
+                byte overlayG = MultiplyByte(overlayPixel.g, tint.g);
+                byte overlayB = MultiplyByte(overlayPixel.b, tint.b);
+                compositePixels[i] = AlphaBlend(basePixel, new Color32(overlayR, overlayG, overlayB, overlayPixel.a));
+            }
+
+            texture.SetPixels32(compositePixels);
+            ConfigureLoadedTexture(texture, TextureWrapMode.Repeat);
+            texture.name = "Minecraft " + outputKey;
+            texture.Apply();
+            return texture;
+        }
+
+        private static Color32 AlphaBlend(Color32 basePixel, Color32 overlayPixel)
+        {
+            int overlayAlpha = overlayPixel.a;
+            if (overlayAlpha == 0)
+                return basePixel;
+
+            int inverseAlpha = 255 - overlayAlpha;
+            byte red = (byte)(((basePixel.r * inverseAlpha) + (overlayPixel.r * overlayAlpha)) / 255);
+            byte green = (byte)(((basePixel.g * inverseAlpha) + (overlayPixel.g * overlayAlpha)) / 255);
+            byte blue = (byte)(((basePixel.b * inverseAlpha) + (overlayPixel.b * overlayAlpha)) / 255);
+            return new Color32(red, green, blue, basePixel.a);
+        }
+
+        private static byte MultiplyByte(byte left, byte right)
+        {
+            return (byte)((left * right) / 255);
         }
 
         private static Texture2D CreateFallbackCreateItemTexture()
@@ -1002,11 +1422,21 @@ namespace Constructed.Unity
                 cameraObject.AddComponent<AudioListener>();
             }
 
+            EnsureFreeCameraController(camera);
             camera.transform.position = new Vector3(8f, 12.5f, -11.5f);
             camera.transform.rotation = Quaternion.Euler(52f, 0f, 0f);
             camera.fieldOfView = 58f;
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 200f;
+        }
+
+        private static void EnsureFreeCameraController(Camera camera)
+        {
+            if (camera == null)
+                throw new ArgumentNullException(nameof(camera));
+
+            if (camera.GetComponent<DemoFreeCameraController>() == null)
+                camera.gameObject.AddComponent<DemoFreeCameraController>();
         }
 
         private void ConfigureLight()
@@ -1087,6 +1517,82 @@ namespace Constructed.Unity
         private static string GetProjectRoot()
         {
             return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+        }
+
+        private void UpdateRotatingVisuals()
+        {
+            if (rotatingVisuals.Count == 0)
+                return;
+
+            float timeSeconds = Application.isPlaying
+                ? Time.realtimeSinceStartup
+                : (float)(DateTime.UtcNow.Ticks / (double)TimeSpan.TicksPerSecond);
+
+            foreach (RotatingVisualState rotatingVisual in rotatingVisuals)
+            {
+                if (rotatingVisual.Transform == null)
+                    continue;
+
+                float angle = Mathf.Repeat(timeSeconds * rotatingVisual.DegreesPerSecond, 360f);
+                rotatingVisual.Transform.localRotation = Quaternion.AngleAxis(angle, Vector3.forward);
+            }
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+                UnityEditor.SceneView.RepaintAll();
+            }
+#endif
+        }
+
+        private static Vector3 ToUnityDirectionVector(Direction direction)
+        {
+            switch (direction)
+            {
+                case Direction.Down:
+                    return Vector3.down;
+                case Direction.Up:
+                    return Vector3.up;
+                case Direction.North:
+                    return Vector3.back;
+                case Direction.South:
+                    return Vector3.forward;
+                case Direction.West:
+                    return Vector3.left;
+                case Direction.East:
+                    return Vector3.right;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
+            }
+        }
+
+        private static float GetCreativeMotorAnimationDegreesPerSecond(Direction facing)
+        {
+            float degreesPerSecond = ConvertCreateSpeedToDegreesPerSecond(CreativeMotorDefaultGeneratedSpeedRpm);
+            return IsPositiveAxisDirection(facing) ? degreesPerSecond : -degreesPerSecond;
+        }
+
+        private static float ConvertCreateSpeedToDegreesPerSecond(float speedRpm)
+        {
+            return speedRpm * 360f / 60f;
+        }
+
+        private static bool IsPositiveAxisDirection(Direction direction)
+        {
+            switch (direction)
+            {
+                case Direction.Up:
+                case Direction.South:
+                case Direction.East:
+                    return true;
+                case Direction.Down:
+                case Direction.North:
+                case Direction.West:
+                    return false;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
+            }
         }
 
         private Mesh CreateGrassBlockMeshCulled(
@@ -1284,6 +1790,8 @@ namespace Constructed.Unity
 
         private void DestroyRuntimeAssets()
         {
+            rotatingVisuals.Clear();
+
             foreach (Material material in materialsByKey.Values)
                 DestroyUnityObject(material);
             materialsByKey.Clear();
@@ -1315,6 +1823,58 @@ namespace Constructed.Unity
                 DestroyUnityObject(missingCreateItemTexture);
                 missingCreateItemTexture = null;
             }
+        }
+
+        private sealed class CombinedMeshBuilder
+        {
+            private readonly List<Vector3> vertices = new List<Vector3>();
+            private readonly List<Vector2> uvs = new List<Vector2>();
+            private readonly List<int> triangles = new List<int>();
+
+            public List<Vector3> Vertices
+            {
+                get { return vertices; }
+            }
+
+            public List<Vector2> Uvs
+            {
+                get { return uvs; }
+            }
+
+            public List<int> Triangles
+            {
+                get { return triangles; }
+            }
+
+            public void AddQuad(IReadOnlyList<Vector3> quadVertices, IReadOnlyList<Vector2> quadUvs)
+            {
+                int baseIndex = vertices.Count;
+                for (int i = 0; i < quadVertices.Count; i++)
+                {
+                    vertices.Add(quadVertices[i]);
+                    uvs.Add(quadUvs[i]);
+                }
+
+                triangles.Add(baseIndex + 0);
+                triangles.Add(baseIndex + 1);
+                triangles.Add(baseIndex + 2);
+                triangles.Add(baseIndex + 0);
+                triangles.Add(baseIndex + 2);
+                triangles.Add(baseIndex + 3);
+            }
+        }
+
+        private sealed class RotatingVisualState
+        {
+            public RotatingVisualState(Transform transform, float degreesPerSecond)
+            {
+                Transform = transform;
+                DegreesPerSecond = degreesPerSecond;
+            }
+
+            public Transform Transform { get; }
+
+            public float DegreesPerSecond { get; }
         }
 
         private static void DestroyUnityObject(UnityEngine.Object target)

@@ -32,6 +32,9 @@ namespace Constructed.Tests
             CreateVisualAssetTarget creativeCrateItem = manifest.GetTarget(ResourceLocation.Parse("create:creative_crate"), CreateVisualAssetKind.Item);
             Assert.IsTrue(ContainsPath(creativeCrateItem, "src/generated/resources/assets/create/models/block/crate/creative/single.json"));
             Assert.IsTrue(ContainsPath(creativeCrateItem, "src/main/resources/assets/create/textures/block/crate_creative.png"));
+
+            CreateVisualAssetTarget creativeMotorBlock = manifest.GetTarget(ResourceLocation.Parse("create:creative_motor"), CreateVisualAssetKind.Block);
+            Assert.IsTrue(ContainsPath(creativeMotorBlock, "src/main/resources/assets/create/models/block/shaft_half.json"));
         }
 
         [Test]

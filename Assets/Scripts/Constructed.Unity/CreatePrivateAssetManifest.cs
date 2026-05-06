@@ -275,6 +275,7 @@ namespace Constructed.Unity
                     Generated("blockstates/creative_motor.json"),
                     Main("models/block/creative_motor/block.json"),
                     Main("models/block/creative_motor/block_vertical.json"),
+                    Main("models/block/shaft_half.json"),
                     Main("textures/block/axis.png"),
                     Main("textures/block/axis_top.png"),
                     Main("textures/block/creative_casing.png"),
