@@ -32,6 +32,7 @@ namespace Constructed.Unity
         private readonly List<BuildInventoryEntry> inventoryEntries = new List<BuildInventoryEntry>();
 
         private Texture2D solidTexture;
+        private DemoCreativeBuildController.ModelBackedIconRenderer iconRenderer;
         private bool inventoryOpen;
         private int selectedHotbarSlotIndex;
 
@@ -48,6 +49,18 @@ namespace Constructed.Unity
         public int InventoryEntryCount
         {
             get { return inventoryEntries.Count; }
+        }
+
+        public Texture2D GetHotbarSlotIconTexture(int index)
+        {
+            ResourceLocation? slotId = GetHotbarSlotId(index);
+            if (!slotId.HasValue)
+                return null;
+
+            EnsureEntriesInitialized();
+            return inventoryEntriesById.TryGetValue(slotId.Value, out BuildInventoryEntry entry)
+                ? LoadEntryIconTexture(entry)
+                : null;
         }
 
         public ResourceLocation? GetHotbarSlotId(int index)
@@ -84,6 +97,12 @@ namespace Constructed.Unity
             foreach (Texture2D texture in texturesByPath.Values)
                 DestroyTexture(texture);
             texturesByPath.Clear();
+
+            if (iconRenderer != null)
+            {
+                iconRenderer.Dispose();
+                iconRenderer = null;
+            }
 
             DestroyTexture(solidTexture);
             solidTexture = null;
@@ -357,7 +376,12 @@ namespace Constructed.Unity
             {
                 bool placeable = entry.ItemId == DemoContentCatalog.CreativeMotorBlockId ||
                     entry.ItemId == DemoContentCatalog.ShaftBlockId;
-                BuildInventoryEntry inventoryEntry = new BuildInventoryEntry(entry.ItemId, entry.Label, entry.PreviewTextureFile, placeable);
+                BuildInventoryEntry inventoryEntry = new BuildInventoryEntry(
+                    entry.ItemId,
+                    entry.Label,
+                    entry.PreviewModelId,
+                    entry.PreviewTextureFile,
+                    placeable);
                 inventoryEntries.Add(inventoryEntry);
                 inventoryEntriesById[entry.ItemId] = inventoryEntry;
             }
@@ -471,15 +495,10 @@ namespace Constructed.Unity
             if (entry == null)
                 return null;
 
-            string projectRoot = GetProjectRoot();
-            string privateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
-            string referenceRepositoryRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot);
-            string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateAssetRoot, entry.IconFile);
-            if (File.Exists(privatePath))
-                return LoadTexture(privatePath);
+            if (iconRenderer == null)
+                iconRenderer = new DemoCreativeBuildController.ModelBackedIconRenderer(GetProjectRoot());
 
-            string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceRepositoryRoot, entry.IconFile);
-            return File.Exists(referencePath) ? LoadTexture(referencePath) : null;
+            return iconRenderer.GetIconTexture(entry);
         }
 
         private Texture2D LoadMinecraftHudTexture(string relativePath)
@@ -631,12 +650,14 @@ namespace Constructed.Unity
             public BuildInventoryEntry(
                 ResourceLocation id,
                 string label,
-                CreatePrivateAssetFileReference iconFile,
+                ResourceLocation previewModelId,
+                CreatePrivateAssetFileReference fallbackIconFile,
                 bool placeable)
             {
                 Id = id;
                 Label = label;
-                IconFile = iconFile ?? throw new ArgumentNullException(nameof(iconFile));
+                PreviewModelId = previewModelId;
+                FallbackIconFile = fallbackIconFile ?? throw new ArgumentNullException(nameof(fallbackIconFile));
                 Placeable = placeable;
             }
 
@@ -644,9 +665,663 @@ namespace Constructed.Unity
 
             public string Label { get; }
 
-            public CreatePrivateAssetFileReference IconFile { get; }
+            public ResourceLocation PreviewModelId { get; }
+
+            public CreatePrivateAssetFileReference FallbackIconFile { get; }
 
             public bool Placeable { get; }
+        }
+
+        private sealed class ModelBackedIconRenderer : IDisposable
+        {
+            private const int RenderResolution = 64;
+            private const float IconPaddingPixels = 6f;
+            private const float FrontFaceCullThreshold = 0.0001f;
+            private const byte AlphaClipThreshold = 8;
+            private const float ItemPreviewBaseScale = 1.6f;
+            private const string MinecraftTextureRootRelativePath = "References/Minecraft-1.21.1-resources/assets/minecraft/textures";
+
+            private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
+                new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
+
+            private readonly string privateCreateAssetRoot;
+            private readonly string referenceCreateAssetRoot;
+            private readonly string minecraftTextureRoot;
+            private readonly Dictionary<ResourceLocation, Texture2D> iconTexturesById =
+                new Dictionary<ResourceLocation, Texture2D>();
+            private readonly Dictionary<string, Texture2D> sourceTexturesByKey =
+                new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+
+            private MinecraftModelLoader privateModelLoader;
+            private MinecraftModelLoader referenceModelLoader;
+            private Texture2D missingTexture;
+
+            public ModelBackedIconRenderer(string projectRoot)
+            {
+                if (string.IsNullOrWhiteSpace(projectRoot))
+                    throw new ArgumentException("Project root cannot be empty.", nameof(projectRoot));
+
+                privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
+                referenceCreateAssetRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot);
+                minecraftTextureRoot = Path.Combine(projectRoot, MinecraftTextureRootRelativePath.Replace('/', Path.DirectorySeparatorChar));
+            }
+
+            public Texture2D GetIconTexture(BuildInventoryEntry entry)
+            {
+                if (entry == null)
+                    return null;
+
+                if (iconTexturesById.TryGetValue(entry.Id, out Texture2D existingIcon))
+                    return existingIcon;
+
+                return TryCreateModelBackedIcon(entry) ?? LoadFallbackTexture(entry.FallbackIconFile);
+            }
+
+            public void Dispose()
+            {
+                HashSet<Texture2D> destroyedTextures = new HashSet<Texture2D>();
+                foreach (Texture2D texture in iconTexturesById.Values)
+                {
+                    if (texture != null && destroyedTextures.Add(texture))
+                        DestroyObject(texture);
+                }
+
+                iconTexturesById.Clear();
+
+                foreach (Texture2D texture in sourceTexturesByKey.Values)
+                {
+                    if (texture != null && destroyedTextures.Add(texture))
+                        DestroyObject(texture);
+                }
+
+                sourceTexturesByKey.Clear();
+
+                if (missingTexture != null && destroyedTextures.Add(missingTexture))
+                {
+                    DestroyObject(missingTexture);
+                    missingTexture = null;
+                }
+            }
+
+            private Texture2D TryCreateModelBackedIcon(BuildInventoryEntry entry)
+            {
+                if (!TryLoadItemModel(entry.PreviewModelId, out MinecraftResolvedModel model) || model == null)
+                    return null;
+
+                if (model.UsesGeneratedItemLayers && model.GeneratedItemTextureIds.Count > 0)
+                {
+                    Texture2D generatedIcon = CreateGeneratedItemIcon(model);
+                    if (generatedIcon != null)
+                        iconTexturesById[entry.Id] = generatedIcon;
+                    return generatedIcon;
+                }
+
+                if (model.Elements.Count == 0)
+                    return null;
+
+                Texture2D renderedIcon = CreateRenderedItemIcon(model);
+                if (renderedIcon != null)
+                    iconTexturesById[entry.Id] = renderedIcon;
+                return renderedIcon;
+            }
+
+            private bool TryLoadItemModel(ResourceLocation modelId, out MinecraftResolvedModel model)
+            {
+                if (TryLoadItemModel(privateCreateAssetRoot, ref privateModelLoader, modelId, out model))
+                    return true;
+
+                return TryLoadItemModel(referenceCreateAssetRoot, ref referenceModelLoader, modelId, out model);
+            }
+
+            private static bool TryLoadItemModel(
+                string assetRoot,
+                ref MinecraftModelLoader loader,
+                ResourceLocation modelId,
+                out MinecraftResolvedModel model)
+            {
+                model = null;
+                if (string.IsNullOrWhiteSpace(assetRoot) || !Directory.Exists(assetRoot))
+                    return false;
+
+                try
+                {
+                    if (loader == null)
+                        loader = new MinecraftModelLoader(assetRoot);
+                    model = loader.LoadModel(modelId);
+                    return model != null;
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
+
+            private Texture2D CreateGeneratedItemIcon(MinecraftResolvedModel model)
+            {
+                List<Texture2D> layers = new List<Texture2D>();
+                foreach (ResourceLocation layerTextureId in model.GeneratedItemTextureIds)
+                {
+                    Texture2D layerTexture = LoadModelTexture(layerTextureId);
+                    if (layerTexture != null)
+                        layers.Add(layerTexture);
+                }
+
+                if (layers.Count == 0)
+                    return null;
+
+                int width = layers[0].width;
+                int height = layers[0].height;
+                Texture2D icon = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                Color32[] compositePixels = new Color32[width * height];
+                foreach (Texture2D layer in layers)
+                {
+                    if (layer.width != width || layer.height != height)
+                        continue;
+
+                    Color32[] layerPixels = layer.GetPixels32();
+                    for (int pixelIndex = 0; pixelIndex < compositePixels.Length; pixelIndex++)
+                        compositePixels[pixelIndex] = AlphaBlend(compositePixels[pixelIndex], layerPixels[pixelIndex]);
+                }
+
+                icon.SetPixels32(compositePixels);
+                ConfigureTexture(icon);
+                icon.name = "Generated Icon " + model.ModelId.Path;
+                icon.Apply(false, false);
+                return icon;
+            }
+
+            private Texture2D CreateRenderedItemIcon(MinecraftResolvedModel model)
+            {
+                List<SoftwareIconFace> visibleFaces = new List<SoftwareIconFace>();
+                List<SoftwareIconFace> allFaces = new List<SoftwareIconFace>();
+                MinecraftModelDisplayTransform display = model.HasGuiDisplay ? model.GuiDisplay : DefaultItemModelDisplay;
+                Quaternion displayRotation = CreateMinecraftDisplayRotation(display.Rotation);
+                Vector3 displayScale = Vector3.Scale(Vector3.one * ItemPreviewBaseScale, display.Scale);
+                Vector3 displayTranslation = display.Translation / 16f;
+
+                foreach (MinecraftModelElement element in model.Elements)
+                {
+                    foreach (MinecraftModelFace face in element.Faces.Values)
+                    {
+                        Vector3[] vertices = CreateModelFaceVertices(element, face.Direction);
+                        for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
+                            vertices[vertexIndex] = TransformItemModelVertex(vertices[vertexIndex], displayRotation, displayScale, displayTranslation);
+
+                        Texture2D texture = LoadModelTexture(face.TextureId);
+                        if (texture == null)
+                            continue;
+
+                        SoftwareIconFace iconFace = new SoftwareIconFace(vertices, CreateModelFaceUvs(face, model.TextureSize), texture);
+                        allFaces.Add(iconFace);
+                        if (CalculateFaceNormal(vertices).z > FrontFaceCullThreshold)
+                            visibleFaces.Add(iconFace);
+                    }
+                }
+
+                Texture2D icon = RasterizeSoftwareIcon(visibleFaces.Count > 0 ? visibleFaces : allFaces);
+                if (icon == null)
+                    return null;
+
+                icon.name = "Rendered Icon " + model.ModelId.Path;
+                return icon;
+            }
+
+            private Texture2D LoadModelTexture(ResourceLocation textureId)
+            {
+                string cacheKey = textureId.ToString();
+                if (sourceTexturesByKey.TryGetValue(cacheKey, out Texture2D cachedTexture))
+                    return cachedTexture;
+
+                string texturePath = ResolveTexturePath(textureId);
+                if (!string.IsNullOrEmpty(texturePath) && File.Exists(texturePath))
+                {
+                    Texture2D texture = LoadTextureFromPath(texturePath);
+                    if (texture != null)
+                    {
+                        sourceTexturesByKey[cacheKey] = texture;
+                        return texture;
+                    }
+                }
+
+                Texture2D missing = GetMissingTexture();
+                sourceTexturesByKey[cacheKey] = missing;
+                return missing;
+            }
+
+            private string ResolveTexturePath(ResourceLocation textureId)
+            {
+                if (textureId.Namespace == "create")
+                {
+                    CreatePrivateAssetFileReference file =
+                        new CreatePrivateAssetFileReference(
+                            CreatePrivateAssetFileReference.MainResourcesPrefix + "textures/" + textureId.Path + ".png");
+                    string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateCreateAssetRoot, file);
+                    if (File.Exists(privatePath))
+                        return privatePath;
+
+                    string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceCreateAssetRoot, file);
+                    return File.Exists(referencePath) ? referencePath : null;
+                }
+
+                if (textureId.Namespace == "minecraft")
+                {
+                    string minecraftPath = Path.Combine(
+                        minecraftTextureRoot,
+                        textureId.Path.Replace('/', Path.DirectorySeparatorChar) + ".png");
+                    return File.Exists(minecraftPath) ? minecraftPath : null;
+                }
+
+                return null;
+            }
+
+            private Texture2D LoadFallbackTexture(CreatePrivateAssetFileReference fallbackIconFile)
+            {
+                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateCreateAssetRoot, fallbackIconFile);
+                if (File.Exists(privatePath))
+                    return LoadTextureFromPath(privatePath);
+
+                string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceCreateAssetRoot, fallbackIconFile);
+                return File.Exists(referencePath) ? LoadTextureFromPath(referencePath) : GetMissingTexture();
+            }
+
+            private Texture2D LoadTextureFromPath(string fullPath)
+            {
+                if (string.IsNullOrWhiteSpace(fullPath))
+                    return null;
+
+                if (sourceTexturesByKey.TryGetValue(fullPath, out Texture2D existingTexture))
+                    return existingTexture;
+
+                byte[] bytes = File.ReadAllBytes(fullPath);
+                Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!texture.LoadImage(bytes, false))
+                {
+                    DestroyObject(texture);
+                    return null;
+                }
+
+                texture.name = Path.GetFileNameWithoutExtension(fullPath);
+                ConfigureTexture(texture);
+                sourceTexturesByKey[fullPath] = texture;
+                return texture;
+            }
+
+            private static Vector3 TransformItemModelVertex(
+                Vector3 vertex,
+                Quaternion displayRotation,
+                Vector3 displayScale,
+                Vector3 displayTranslation)
+            {
+                return (displayRotation * Vector3.Scale(vertex, displayScale)) + displayTranslation;
+            }
+
+            private static Quaternion CreateMinecraftDisplayRotation(Vector3 rotationDegrees)
+            {
+                return Quaternion.AngleAxis(rotationDegrees.x, Vector3.right) *
+                    Quaternion.AngleAxis(rotationDegrees.y, Vector3.up) *
+                    Quaternion.AngleAxis(rotationDegrees.z, Vector3.forward);
+            }
+
+            private static Vector3 CalculateFaceNormal(Vector3[] vertices)
+            {
+                return Vector3.Cross(vertices[1] - vertices[0], vertices[2] - vertices[0]).normalized;
+            }
+
+            private static Texture2D RasterizeSoftwareIcon(IReadOnlyList<SoftwareIconFace> faces)
+            {
+                if (faces == null || faces.Count == 0)
+                    return null;
+                if (!TryCalculateProjectedBounds(faces, out float minX, out float maxX, out float minY, out float maxY))
+                    return null;
+
+                float width = maxX - minX;
+                float height = maxY - minY;
+                if (width <= 0f || height <= 0f)
+                    return null;
+
+                Color32[] pixels = new Color32[RenderResolution * RenderResolution];
+                float[] depthBuffer = new float[pixels.Length];
+                for (int pixelIndex = 0; pixelIndex < depthBuffer.Length; pixelIndex++)
+                    depthBuffer[pixelIndex] = float.NegativeInfinity;
+
+                float availableSize = Mathf.Max(1f, RenderResolution - (IconPaddingPixels * 2f));
+                float pixelsPerUnit = availableSize / Mathf.Max(width, height);
+                Vector2 projectedCenter = new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
+
+                for (int faceIndex = 0; faceIndex < faces.Count; faceIndex++)
+                {
+                    SoftwareIconFace face = faces[faceIndex];
+                    Vector3[] projected = ProjectFaceVertices(face.Vertices, projectedCenter, pixelsPerUnit);
+                    RasterizeSoftwareTriangle(projected[0], projected[1], projected[2], face.Uvs[0], face.Uvs[1], face.Uvs[2], face.Texture, pixels, depthBuffer);
+                    RasterizeSoftwareTriangle(projected[0], projected[2], projected[3], face.Uvs[0], face.Uvs[2], face.Uvs[3], face.Texture, pixels, depthBuffer);
+                }
+
+                Texture2D icon = new Texture2D(RenderResolution, RenderResolution, TextureFormat.RGBA32, false);
+                icon.SetPixels32(pixels);
+                ConfigureTexture(icon);
+                icon.Apply(false, false);
+                if (HasVisiblePixels(icon))
+                    return icon;
+
+                DestroyObject(icon);
+                return null;
+            }
+
+            private static bool TryCalculateProjectedBounds(
+                IReadOnlyList<SoftwareIconFace> faces,
+                out float minX,
+                out float maxX,
+                out float minY,
+                out float maxY)
+            {
+                minX = float.PositiveInfinity;
+                maxX = float.NegativeInfinity;
+                minY = float.PositiveInfinity;
+                maxY = float.NegativeInfinity;
+                bool hasVertices = false;
+                for (int faceIndex = 0; faceIndex < faces.Count; faceIndex++)
+                {
+                    Vector3[] vertices = faces[faceIndex].Vertices;
+                    for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
+                    {
+                        Vector3 vertex = vertices[vertexIndex];
+                        minX = Mathf.Min(minX, vertex.x);
+                        maxX = Mathf.Max(maxX, vertex.x);
+                        minY = Mathf.Min(minY, vertex.y);
+                        maxY = Mathf.Max(maxY, vertex.y);
+                        hasVertices = true;
+                    }
+                }
+
+                return hasVertices;
+            }
+
+            private static Vector3[] ProjectFaceVertices(Vector3[] vertices, Vector2 projectedCenter, float pixelsPerUnit)
+            {
+                Vector3[] projected = new Vector3[vertices.Length];
+                float halfResolution = RenderResolution * 0.5f;
+                for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
+                {
+                    Vector3 vertex = vertices[vertexIndex];
+                    projected[vertexIndex] = new Vector3(
+                        ((vertex.x - projectedCenter.x) * pixelsPerUnit) + halfResolution,
+                        ((vertex.y - projectedCenter.y) * pixelsPerUnit) + halfResolution,
+                        vertex.z);
+                }
+
+                return projected;
+            }
+
+            private static void RasterizeSoftwareTriangle(
+                Vector3 a,
+                Vector3 b,
+                Vector3 c,
+                Vector2 uvA,
+                Vector2 uvB,
+                Vector2 uvC,
+                Texture2D texture,
+                Color32[] pixels,
+                float[] depthBuffer)
+            {
+                float area = Edge(a, b, new Vector2(c.x, c.y));
+                if (Mathf.Abs(area) <= 0.00001f)
+                    return;
+
+                int minX = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x, Mathf.Min(b.x, c.x))), 0, RenderResolution - 1);
+                int maxX = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x, Mathf.Max(b.x, c.x))), 0, RenderResolution - 1);
+                int minY = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y, Mathf.Min(b.y, c.y))), 0, RenderResolution - 1);
+                int maxY = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y, Mathf.Max(b.y, c.y))), 0, RenderResolution - 1);
+
+                for (int y = minY; y <= maxY; y++)
+                {
+                    for (int x = minX; x <= maxX; x++)
+                    {
+                        Vector2 samplePosition = new Vector2(x + 0.5f, y + 0.5f);
+                        float w0 = Edge(b, c, samplePosition) / area;
+                        float w1 = Edge(c, a, samplePosition) / area;
+                        float w2 = Edge(a, b, samplePosition) / area;
+                        if (w0 < -0.0001f || w1 < -0.0001f || w2 < -0.0001f)
+                            continue;
+
+                        float depth = (a.z * w0) + (b.z * w1) + (c.z * w2);
+                        int pixelIndex = (y * RenderResolution) + x;
+                        if (depth <= depthBuffer[pixelIndex])
+                            continue;
+
+                        Vector2 uv = (uvA * w0) + (uvB * w1) + (uvC * w2);
+                        Color32 sample = SampleTexturePoint(texture, uv);
+                        if (sample.a <= AlphaClipThreshold)
+                            continue;
+
+                        pixels[pixelIndex] = sample;
+                        depthBuffer[pixelIndex] = depth;
+                    }
+                }
+            }
+
+            private static float Edge(Vector3 a, Vector3 b, Vector2 c)
+            {
+                return ((c.x - a.x) * (b.y - a.y)) - ((c.y - a.y) * (b.x - a.x));
+            }
+
+            private static Color32 SampleTexturePoint(Texture2D texture, Vector2 uv)
+            {
+                int x = Mathf.Clamp(Mathf.FloorToInt(uv.x * texture.width), 0, texture.width - 1);
+                int y = Mathf.Clamp(Mathf.FloorToInt(uv.y * texture.height), 0, texture.height - 1);
+                return texture.GetPixel(x, y);
+            }
+
+            private Texture2D GetMissingTexture()
+            {
+                if (missingTexture != null)
+                    return missingTexture;
+
+                missingTexture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+                for (int y = 0; y < 16; y++)
+                {
+                    for (int x = 0; x < 16; x++)
+                    {
+                        bool border = x == 0 || y == 0 || x == 15 || y == 15;
+                        Color pixel = border
+                            ? new Color(0.88f, 0.2f, 0.16f, 1f)
+                            : (((x + y) & 1) == 0 ? new Color(0f, 0f, 0f, 0f) : new Color(1f, 0f, 1f, 0.92f));
+                        missingTexture.SetPixel(x, y, pixel);
+                    }
+                }
+
+                ConfigureTexture(missingTexture);
+                missingTexture.name = "Missing Item Icon";
+                missingTexture.Apply(false, false);
+                return missingTexture;
+            }
+
+            private static void ConfigureTexture(Texture2D texture)
+            {
+                if (texture == null)
+                    return;
+
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Clamp;
+                texture.anisoLevel = 0;
+                texture.mipMapBias = 0f;
+            }
+
+            private static Vector3[] CreateModelFaceVertices(MinecraftModelElement element, Direction direction)
+            {
+                Vector3 from = element.From;
+                Vector3 to = element.To;
+                Vector3[] vertices;
+                switch (direction)
+                {
+                    case Direction.Down:
+                        vertices = new[]
+                        {
+                            new Vector3(from.x, from.y, from.z),
+                            new Vector3(to.x, from.y, from.z),
+                            new Vector3(to.x, from.y, to.z),
+                            new Vector3(from.x, from.y, to.z)
+                        };
+                        break;
+                    case Direction.Up:
+                        vertices = new[]
+                        {
+                            new Vector3(from.x, to.y, to.z),
+                            new Vector3(to.x, to.y, to.z),
+                            new Vector3(to.x, to.y, from.z),
+                            new Vector3(from.x, to.y, from.z)
+                        };
+                        break;
+                    case Direction.North:
+                        vertices = new[]
+                        {
+                            new Vector3(to.x, from.y, from.z),
+                            new Vector3(from.x, from.y, from.z),
+                            new Vector3(from.x, to.y, from.z),
+                            new Vector3(to.x, to.y, from.z)
+                        };
+                        break;
+                    case Direction.South:
+                        vertices = new[]
+                        {
+                            new Vector3(from.x, from.y, to.z),
+                            new Vector3(to.x, from.y, to.z),
+                            new Vector3(to.x, to.y, to.z),
+                            new Vector3(from.x, to.y, to.z)
+                        };
+                        break;
+                    case Direction.West:
+                        vertices = new[]
+                        {
+                            new Vector3(from.x, from.y, from.z),
+                            new Vector3(from.x, from.y, to.z),
+                            new Vector3(from.x, to.y, to.z),
+                            new Vector3(from.x, to.y, from.z)
+                        };
+                        break;
+                    case Direction.East:
+                        vertices = new[]
+                        {
+                            new Vector3(to.x, from.y, to.z),
+                            new Vector3(to.x, from.y, from.z),
+                            new Vector3(to.x, to.y, from.z),
+                            new Vector3(to.x, to.y, to.z)
+                        };
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
+                }
+
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    if (element.Rotation != null)
+                        vertices[i] = ApplyElementRotation(vertices[i], element.Rotation);
+
+                    vertices[i] = (vertices[i] / 16f) - (Vector3.one * 0.5f);
+                }
+
+                return vertices;
+            }
+
+            private static Vector3 ApplyElementRotation(Vector3 point, MinecraftModelElementRotation rotation)
+            {
+                Vector3 axis;
+                switch (rotation.Axis)
+                {
+                    case Axis.X:
+                        axis = Vector3.right;
+                        break;
+                    case Axis.Y:
+                        axis = Vector3.up;
+                        break;
+                    case Axis.Z:
+                        axis = Vector3.forward;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+
+                return rotation.Origin + (Quaternion.AngleAxis(rotation.Angle, axis) * (point - rotation.Origin));
+            }
+
+            private static Vector2[] CreateModelFaceUvs(MinecraftModelFace face, Vector2 textureSize)
+            {
+                Vector2[] uvs =
+                {
+                    new Vector2(face.Uv.x / textureSize.x, 1f - (face.Uv.w / textureSize.y)),
+                    new Vector2(face.Uv.z / textureSize.x, 1f - (face.Uv.w / textureSize.y)),
+                    new Vector2(face.Uv.z / textureSize.x, 1f - (face.Uv.y / textureSize.y)),
+                    new Vector2(face.Uv.x / textureSize.x, 1f - (face.Uv.y / textureSize.y))
+                };
+
+                for (int step = 0; step < (face.RotationDegrees / 90); step++)
+                {
+                    uvs = new[]
+                    {
+                        uvs[3],
+                        uvs[0],
+                        uvs[1],
+                        uvs[2]
+                    };
+                }
+
+                return uvs;
+            }
+
+            private static Color32 AlphaBlend(Color32 basePixel, Color32 overlayPixel)
+            {
+                int overlayAlpha = overlayPixel.a;
+                if (overlayAlpha == 0)
+                    return basePixel;
+
+                int inverseAlpha = 255 - overlayAlpha;
+                byte red = (byte)(((basePixel.r * inverseAlpha) + (overlayPixel.r * overlayAlpha)) / 255);
+                byte green = (byte)(((basePixel.g * inverseAlpha) + (overlayPixel.g * overlayAlpha)) / 255);
+                byte blue = (byte)(((basePixel.b * inverseAlpha) + (overlayPixel.b * overlayAlpha)) / 255);
+                byte alpha = (byte)Mathf.Clamp(basePixel.a + overlayAlpha, 0, 255);
+                return new Color32(red, green, blue, alpha);
+            }
+
+            private static bool HasVisiblePixels(Texture2D texture)
+            {
+                if (texture == null)
+                    return false;
+
+                Color32[] pixels = texture.GetPixels32();
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    if (pixels[i].a > 0)
+                        return true;
+                }
+
+                return false;
+            }
+
+            private static void DestroyObject(UnityEngine.Object target)
+            {
+                if (target == null)
+                    return;
+
+                if (Application.isPlaying)
+                    Destroy(target);
+                else
+                    DestroyImmediate(target);
+            }
+
+            private readonly struct SoftwareIconFace
+            {
+                public SoftwareIconFace(Vector3[] vertices, Vector2[] uvs, Texture2D texture)
+                {
+                    Vertices = vertices ?? throw new ArgumentNullException(nameof(vertices));
+                    Uvs = uvs ?? throw new ArgumentNullException(nameof(uvs));
+                    Texture = texture;
+                }
+
+                public Vector3[] Vertices { get; }
+
+                public Vector2[] Uvs { get; }
+
+                public Texture2D Texture { get; }
+            }
         }
 
         private readonly struct DemoWorldHit
