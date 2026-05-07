@@ -18,29 +18,46 @@ namespace Constructed.Tests
                 DemoVerticalSlicePresenter presenter = presenterObject.AddComponent<DemoVerticalSlicePresenter>();
                 presenter.Rebuild();
 
-                Assert.AreEqual(268, presenter.GeneratedBlockCount);
-                Assert.AreEqual(7, presenter.GeneratedItemPreviewCount);
-                Assert.AreEqual(5, presenter.GeneratedBlockCatalogPreviewCount);
-                Assert.AreEqual(6, presenter.GeneratedStateDrivenWorldBlockCount);
-                Assert.AreEqual(5, presenter.GeneratedModelItemPreviewCount);
-                Assert.AreEqual(2, presenter.GeneratedFlatItemPreviewCount);
+                Assert.AreEqual(67, presenter.GeneratedBlockCount);
+                Assert.AreEqual(0, presenter.GeneratedItemPreviewCount);
+                Assert.AreEqual(0, presenter.GeneratedBlockCatalogPreviewCount);
+                Assert.AreEqual(3, presenter.GeneratedStateDrivenWorldBlockCount);
+                Assert.AreEqual(0, presenter.GeneratedModelItemPreviewCount);
+                Assert.AreEqual(0, presenter.GeneratedFlatItemPreviewCount);
                 Assert.AreEqual(0, presenter.FailedItemModelPreviewCount);
                 Assert.AreEqual(0, presenter.FailedBlockCatalogPreviewCount);
                 Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
-                Assert.AreEqual(9, presenter.GeneratedCreativeMotorShowcasePlatformBlockCount);
-                Assert.AreEqual(1, presenter.GeneratedCreativeMotorShowcaseMotorCount);
-                Assert.AreEqual(1, presenter.GeneratedCreativeMotorShowcaseAnimatedShaftCount);
+                Assert.AreEqual(1, presenter.GeneratedAnimatedMotorOutputCount);
+                Assert.AreEqual(2, presenter.GeneratedAnimatedShaftCount);
                 Assert.AreEqual(CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count, presenter.SyncedCreateAssetFileCount + presenter.MissingCreateAssetFileCount);
                 Assert.AreEqual(1, presenterObject.transform.childCount);
                 Assert.AreEqual("Generated Demo Layout", presenterObject.transform.GetChild(0).name);
+                Assert.AreEqual(1, presenterObject.transform.GetChild(0).childCount);
+                Assert.AreEqual("World", presenterObject.transform.GetChild(0).GetChild(0).name);
+                GameObject playerObject = GameObject.Find(DemoMinecraftFirstPersonController.PlayerRootName);
+                Assert.NotNull(playerObject);
+                DemoMinecraftFirstPersonController playerController = playerObject.GetComponent<DemoMinecraftFirstPersonController>();
+                Assert.NotNull(playerController);
+                CharacterController characterController = playerObject.GetComponent<CharacterController>();
+                Assert.NotNull(characterController);
+                Assert.AreEqual(DemoMinecraftFirstPersonController.StandingWidth * 0.5f, characterController.radius, 0.001f);
+                Assert.AreEqual(DemoMinecraftFirstPersonController.StandingHeight, characterController.height, 0.001f);
+                Assert.AreEqual(DemoMinecraftFirstPersonController.DefaultStepOffset, characterController.stepOffset, 0.001f);
                 GameObject cameraObject = GameObject.Find("Main Camera");
                 Assert.NotNull(cameraObject);
-                Assert.NotNull(cameraObject.GetComponent<DemoFreeCameraController>());
+                Assert.NotNull(cameraObject.GetComponent<DemoCreativeBuildController>());
+                Assert.AreSame(playerObject.transform, cameraObject.transform.parent);
+                Assert.AreEqual(DemoMinecraftFirstPersonController.StandingEyeHeight, cameraObject.transform.localPosition.y, 0.001f);
+                Assert.AreEqual(DemoMinecraftFirstPersonController.DefaultFieldOfView, cameraObject.GetComponent<Camera>().fieldOfView, 0.001f);
+                Assert.Less(Quaternion.Angle(cameraObject.transform.localRotation, Quaternion.Euler(12f, 0f, 0f)), 0.001f);
+                MeshCollider[] colliders = presenterObject.GetComponentsInChildren<MeshCollider>(true);
+                Assert.Greater(colliders.Length, 0);
             }
             finally
             {
                 Object.DestroyImmediate(presenterObject);
                 DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
                 DestroyIfFound("Directional Light");
             }
         }
@@ -78,6 +95,7 @@ namespace Constructed.Tests
             {
                 Object.DestroyImmediate(presenterObject);
                 DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
                 DestroyIfFound("Directional Light");
             }
         }
@@ -148,6 +166,7 @@ namespace Constructed.Tests
             {
                 Object.DestroyImmediate(presenterObject);
                 DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
                 DestroyIfFound("Directional Light");
             }
         }
@@ -199,19 +218,30 @@ namespace Constructed.Tests
         }
 
         [Test]
-        public void PresenterCreativeMotorAnimationUsesCreateDefaultSpeedAndFacingSign()
+        public void PresenterKeepsStandaloneShaftOnStateDrivenPathWhenMotorIsRemoved()
         {
-            MethodInfo method = typeof(DemoVerticalSlicePresenter).GetMethod(
-                "GetCreativeMotorAnimationDegreesPerSecond",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            GameObject presenterObject = new GameObject("Presenter Standalone Shaft Test");
+            try
+            {
+                DemoVerticalSlicePresenter presenter = presenterObject.AddComponent<DemoVerticalSlicePresenter>();
+                presenter.Rebuild();
 
-            Assert.NotNull(method);
-            AssertAnimationSpeed(method, Constructed.Core.Direction.East, 96f);
-            AssertAnimationSpeed(method, Constructed.Core.Direction.South, 96f);
-            AssertAnimationSpeed(method, Constructed.Core.Direction.Up, 96f);
-            AssertAnimationSpeed(method, Constructed.Core.Direction.West, -96f);
-            AssertAnimationSpeed(method, Constructed.Core.Direction.North, -96f);
-            AssertAnimationSpeed(method, Constructed.Core.Direction.Down, -96f);
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.CreativeMotorPosition));
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.SecondShaftPosition));
+
+                Assert.AreEqual(65, presenter.GeneratedBlockCount);
+                Assert.AreEqual(1, presenter.GeneratedStateDrivenWorldBlockCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedMotorOutputCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
+            }
+            finally
+            {
+                Object.DestroyImmediate(presenterObject);
+                DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
+                DestroyIfFound("Directional Light");
+            }
         }
 
         private static void AssertSurfaceTexture(Texture2D texture)
@@ -256,12 +286,6 @@ namespace Constructed.Tests
         {
             object result = method.Invoke(null, new object[] { catalog, stateAbove });
             Assert.AreEqual(expected, (bool)result, stateAbove.Definition.Id.ToString());
-        }
-
-        private static void AssertAnimationSpeed(MethodInfo method, Constructed.Core.Direction direction, float expectedDegreesPerSecond)
-        {
-            object result = method.Invoke(null, new object[] { direction });
-            Assert.AreEqual(expectedDegreesPerSecond, (float)result, 0.001f, direction.ToString());
         }
     }
 }

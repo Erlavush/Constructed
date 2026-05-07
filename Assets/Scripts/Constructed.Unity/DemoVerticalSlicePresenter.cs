@@ -18,6 +18,7 @@ namespace Constructed.Unity
         private const string PrivateGrassSideOverlayTexturePath = PrivateMinecraftTextureDirectory + "/grass_block_side_overlay.png";
         private const string PrivateDirtTexturePath = PrivateMinecraftTextureDirectory + "/dirt.png";
         private const string ReferenceMinecraftTextureRoot = "References/Minecraft-1.21.1-resources/assets/minecraft/textures/block";
+        private const string PlayerRootName = DemoMinecraftFirstPersonController.PlayerRootName;
         private const float ItemCatalogZ = -2.5f;
         private const float ItemCatalogStartX = 1.5f;
         private const float ItemCatalogSpacing = 2.15f;
@@ -29,12 +30,10 @@ namespace Constructed.Unity
         private const float ItemModelPreviewBaseScale = 1.6f;
         private const float BlockModelPreviewBaseScale = 1.15f;
         private const float WorldBlockModelBaseScale = 1.0f;
-        private const float CreativeMotorDefaultGeneratedSpeedRpm = 16f;
 
         private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
             new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
         private static readonly Color32 DefaultMinecraftGrassTint = new Color32(124, 189, 107, 255);
-        private static readonly BlockPos CreativeMotorShowcaseCenterPosition = new BlockPos(24, 1, 8);
         private static readonly ResourceLocation CreativeMotorHalfShaftModelId = ResourceLocation.Parse("create:block/shaft_half");
 
         private readonly Dictionary<string, Material> materialsByKey = new Dictionary<string, Material>();
@@ -44,6 +43,8 @@ namespace Constructed.Unity
         private readonly List<RotatingVisualState> rotatingVisuals = new List<RotatingVisualState>();
         private Mesh runtimeGrassBlockMesh;
         private Texture2D missingCreateItemTexture;
+        private DemoContentCatalog runtimeCatalog;
+        private BlockWorld runtimeWorld;
 
         public int GeneratedBlockCount { get; private set; }
 
@@ -69,11 +70,27 @@ namespace Constructed.Unity
 
         public int CopiedCreateAssetFileCount { get; private set; }
 
-        public int GeneratedCreativeMotorShowcasePlatformBlockCount { get; private set; }
+        public int GeneratedAnimatedMotorOutputCount { get; private set; }
 
-        public int GeneratedCreativeMotorShowcaseMotorCount { get; private set; }
+        public int GeneratedAnimatedShaftCount { get; private set; }
 
-        public int GeneratedCreativeMotorShowcaseAnimatedShaftCount { get; private set; }
+        public DemoContentCatalog Catalog
+        {
+            get
+            {
+                EnsureDemoWorldInitialized();
+                return runtimeCatalog;
+            }
+        }
+
+        public BlockWorld World
+        {
+            get
+            {
+                EnsureDemoWorldInitialized();
+                return runtimeWorld;
+            }
+        }
 
         private void OnEnable()
         {
@@ -87,6 +104,7 @@ namespace Constructed.Unity
 
         public void Rebuild()
         {
+            EnsureDemoWorldInitialized();
             ClearGeneratedObjects();
             DestroyRuntimeAssets();
             GeneratedBlockCount = 0;
@@ -101,12 +119,10 @@ namespace Constructed.Unity
             SyncedCreateAssetFileCount = 0;
             MissingCreateAssetFileCount = 0;
             CopiedCreateAssetFileCount = 0;
-            GeneratedCreativeMotorShowcasePlatformBlockCount = 0;
-            GeneratedCreativeMotorShowcaseMotorCount = 0;
-            GeneratedCreativeMotorShowcaseAnimatedShaftCount = 0;
+            GeneratedAnimatedMotorOutputCount = 0;
+            GeneratedAnimatedShaftCount = 0;
 
-            DemoContentCatalog catalog = DemoContentCatalog.Create();
-            BlockWorld world = DemoVerticalSliceBootstrap.CreateVerticalSliceWorld(catalog);
+            DemoKineticSnapshot kineticSnapshot = DemoKineticResolver.Resolve(runtimeWorld, runtimeCatalog);
             CreatePrivateAssetSyncResult createAssetSync = SyncPrivateCreateAssets();
             if (createAssetSync != null)
             {
@@ -119,19 +135,47 @@ namespace Constructed.Unity
 
             Transform root = CreateGeneratedRoot();
             Transform worldRoot = CreateChildRoot(root, "World");
-            Transform itemCatalogRoot = CreateChildRoot(root, "Item Catalog");
-            Transform blockCatalogRoot = CreateChildRoot(root, "Block Catalog");
-            Transform showcaseRoot = CreateChildRoot(root, "Focused Block Showcases");
 
-            foreach (WorldBlockEntry entry in world.GetStoredBlocks())
-                CreateBlock(worldRoot, catalog, entry, world, modelLoader, blockStateLoader);
-
-            CreateItemCatalog(itemCatalogRoot, modelLoader);
-            CreateBlockCatalog(blockCatalogRoot, modelLoader, blockStateLoader);
-            CreateCreativeMotorShowcase(showcaseRoot, catalog, modelLoader, blockStateLoader);
+            foreach (WorldBlockEntry entry in runtimeWorld.GetStoredBlocks())
+                CreateBlock(worldRoot, runtimeCatalog, entry, runtimeWorld, kineticSnapshot, modelLoader, blockStateLoader);
 
             ConfigureCamera();
             ConfigureLight();
+        }
+
+        public bool TryPlaceBlock(ResourceLocation blockId, BlockPos position, Direction nearestLookingDirection)
+        {
+            EnsureDemoWorldInitialized();
+            if (!DemoKineticPlacementRules.IsPlaceableBlock(runtimeCatalog, blockId))
+                return false;
+            if (!runtimeWorld.IsAir(runtimeWorld.GetBlockState(position)))
+                return false;
+
+            BlockState placementState =
+                DemoKineticPlacementRules.CreatePlacementState(runtimeCatalog, runtimeWorld, blockId, position, nearestLookingDirection);
+            runtimeWorld.SetBlockState(position, placementState);
+            Rebuild();
+            return true;
+        }
+
+        public bool TryRemoveBlock(BlockPos position)
+        {
+            EnsureDemoWorldInitialized();
+            BlockState state = runtimeWorld.GetBlockState(position);
+            if (runtimeWorld.IsAir(state))
+                return false;
+
+            runtimeWorld.RemoveBlock(position);
+            Rebuild();
+            return true;
+        }
+
+        private void EnsureDemoWorldInitialized()
+        {
+            if (runtimeCatalog == null)
+                runtimeCatalog = DemoContentCatalog.Create();
+            if (runtimeWorld == null)
+                runtimeWorld = DemoVerticalSliceBootstrap.CreateVerticalSliceWorld(runtimeCatalog);
         }
 
         private Transform CreateGeneratedRoot()
@@ -153,10 +197,11 @@ namespace Constructed.Unity
             DemoContentCatalog catalog,
             WorldBlockEntry entry,
             BlockWorld world,
+            DemoKineticSnapshot kineticSnapshot,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
-            if (TryCreateStateDrivenWorldBlock(root, catalog, entry, modelLoader, blockStateLoader))
+            if (TryCreateStateDrivenWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader))
             {
                 GeneratedStateDrivenWorldBlockCount++;
                 GeneratedBlockCount++;
@@ -171,11 +216,14 @@ namespace Constructed.Unity
             Transform root,
             DemoContentCatalog catalog,
             WorldBlockEntry entry,
+            DemoKineticSnapshot kineticSnapshot,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
             if (entry.State.Definition.Id == catalog.CreativeMotor.Id)
-                return TryCreateCreativeMotorWorldBlock(root, catalog, entry, modelLoader, blockStateLoader);
+                return TryCreateCreativeMotorWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
+            if (entry.State.Definition.Id == catalog.Shaft.Id)
+                return TryCreateShaftWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
 
             if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
                 return false;
@@ -191,7 +239,7 @@ namespace Constructed.Unity
                 return false;
             }
 
-            AddLabel(blockRoot.transform, GetLabel(catalog, entry.State));
+            AddMeshColliders(blockRoot);
             return true;
         }
 
@@ -212,19 +260,16 @@ namespace Constructed.Unity
             Renderer renderer = block.GetComponent<Renderer>();
             if (renderer != null)
                 renderer.sharedMaterial = GetMaterial(catalog, entry.State);
-
-            if (entry.State.Definition.Id != catalog.Surface.Id)
-                AddLabel(block.transform, GetLabel(catalog, entry.State));
         }
 
         private void CreateGrassSurfaceBlock(Transform root, DemoContentCatalog catalog, WorldBlockEntry entry, BlockWorld world)
         {
-            bool hasUp = ShouldCullGrassTop(catalog, world.GetBlockState(entry.Position.Relative(Direction.Up)));
-            bool hasDown = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.Down)));
-            bool hasNorth = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.North)));
-            bool hasSouth = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.South)));
-            bool hasWest = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.West)));
-            bool hasEast = !world.IsAir(world.GetBlockState(entry.Position.Relative(Direction.East)));
+            bool hasUp = ShouldCullGrassFace(catalog, world.GetBlockState(entry.Position.Relative(Direction.Up)));
+            bool hasDown = ShouldCullGrassFace(catalog, world.GetBlockState(entry.Position.Relative(Direction.Down)));
+            bool hasNorth = ShouldCullGrassFace(catalog, world.GetBlockState(entry.Position.Relative(Direction.North)));
+            bool hasSouth = ShouldCullGrassFace(catalog, world.GetBlockState(entry.Position.Relative(Direction.South)));
+            bool hasWest = ShouldCullGrassFace(catalog, world.GetBlockState(entry.Position.Relative(Direction.West)));
+            bool hasEast = ShouldCullGrassFace(catalog, world.GetBlockState(entry.Position.Relative(Direction.East)));
 
             Mesh mesh = CreateGrassBlockMeshCulled(hasUp, hasDown, hasNorth, hasSouth, hasWest, hasEast);
             if (mesh == null)
@@ -243,9 +288,16 @@ namespace Constructed.Unity
                 GetMaterial("surface_dirt_bottom", Color.white, LoadMinecraftTexture("surface_dirt_bottom", PrivateDirtTexturePath, "dirt.png")),
                 GetMaterial("surface_grass_side_tinted", Color.white, LoadTintedGrassSideTexture())
             };
+            MeshCollider meshCollider = block.AddComponent<MeshCollider>();
+            meshCollider.sharedMesh = mesh;
         }
 
         private static bool ShouldCullGrassTop(DemoContentCatalog catalog, BlockState stateAbove)
+        {
+            return ShouldCullGrassFace(catalog, stateAbove);
+        }
+
+        private static bool ShouldCullGrassFace(DemoContentCatalog catalog, BlockState stateAbove)
         {
             if (catalog == null)
                 throw new ArgumentNullException(nameof(catalog));
@@ -262,84 +314,85 @@ namespace Constructed.Unity
             Transform root,
             DemoContentCatalog catalog,
             WorldBlockEntry entry,
+            DemoKineticSnapshot kineticSnapshot,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
             Direction facing = entry.State.Get(DemoContentCatalog.FacingProperty);
-            bool createdShaft;
+            float shaftSpeed = 0f;
+            float shaftAngleOffset = 0f;
+            if (kineticSnapshot != null && kineticSnapshot.TryGet(entry.Position, out DemoKineticComponentState kineticState))
+            {
+                shaftSpeed = kineticState.Speed;
+                shaftAngleOffset = DemoKineticResolver.GetRotationOffsetDegrees(entry.Position, kineticState.Axis);
+            }
+
             if (!TryCreateCreativeMotorAssembly(
                     root,
                     GetDisplayName(catalog, entry),
-                    GetLabel(catalog, entry.State),
                     ToUnityPosition(entry.Position),
                     facing,
                     WorldBlockModelBaseScale,
                     modelLoader,
                     blockStateLoader,
-                    true,
-                    out createdShaft))
+                    shaftSpeed,
+                    shaftAngleOffset))
             {
                 FailedStateDrivenWorldBlockCount++;
                 return false;
             }
 
+            AddMeshColliders(root.GetChild(root.childCount - 1).gameObject);
+            GeneratedAnimatedMotorOutputCount++;
             return true;
         }
 
-        private void CreateCreativeMotorShowcase(
+        private bool TryCreateShaftWorldBlock(
             Transform root,
             DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            DemoKineticSnapshot kineticSnapshot,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
-            Transform showcaseRoot = CreateChildRoot(root, "Creative Motor Showcase");
-            AddFloatingLabel(
-                showcaseRoot,
-                "Creative Motor Focus",
-                new Vector3(
-                    CreativeMotorShowcaseCenterPosition.X + 0.5f,
-                    CreativeMotorShowcaseCenterPosition.Y + 2.05f,
-                    CreativeMotorShowcaseCenterPosition.Z + 0.5f),
-                0.16f);
+            if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
+                return false;
 
-            BlockWorld showcaseWorld = new BlockWorld(catalog.Air.DefaultState);
-            for (int x = CreativeMotorShowcaseCenterPosition.X - 1; x <= CreativeMotorShowcaseCenterPosition.X + 1; x++)
-            {
-                for (int z = CreativeMotorShowcaseCenterPosition.Z - 1; z <= CreativeMotorShowcaseCenterPosition.Z + 1; z++)
-                    showcaseWorld.SetBlockState(new BlockPos(x, 0, z), catalog.Surface.DefaultState);
-            }
+            GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.transform.SetParent(root, false);
+            blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
 
-            BlockState showcaseMotorState =
-                catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.North);
-            showcaseWorld.SetBlockState(CreativeMotorShowcaseCenterPosition, showcaseMotorState);
-
-            for (int x = CreativeMotorShowcaseCenterPosition.X - 1; x <= CreativeMotorShowcaseCenterPosition.X + 1; x++)
-            {
-                for (int z = CreativeMotorShowcaseCenterPosition.Z - 1; z <= CreativeMotorShowcaseCenterPosition.Z + 1; z++)
-                {
-                    WorldBlockEntry grassEntry = new WorldBlockEntry(new BlockPos(x, 0, z), catalog.Surface.DefaultState);
-                    CreateGrassSurfaceBlock(showcaseRoot, catalog, grassEntry, showcaseWorld);
-                    GeneratedCreativeMotorShowcasePlatformBlockCount++;
-                }
-            }
-
-            bool createdShaft;
-            if (TryCreateCreativeMotorAssembly(
-                    showcaseRoot,
-                    "Creative Motor Showcase",
-                    "Creative Motor",
-                    ToUnityPosition(CreativeMotorShowcaseCenterPosition),
-                    Direction.North,
+            DemoKineticComponentState kineticState = default;
+            bool hasKineticState = kineticSnapshot != null && kineticSnapshot.TryGet(entry.Position, out kineticState);
+            Transform modelRoot = hasKineticState
+                ? CreateChildRoot(blockRoot.transform, "Spin")
+                : blockRoot.transform;
+            if (!TryCreateCombinedBlockModel(
+                    modelRoot,
+                    entry.State.Definition.Id,
+                    visualProperties,
                     WorldBlockModelBaseScale,
                     modelLoader,
-                    blockStateLoader,
-                    true,
-                    out createdShaft))
+                    blockStateLoader))
             {
-                GeneratedCreativeMotorShowcaseMotorCount++;
-                if (createdShaft)
-                    GeneratedCreativeMotorShowcaseAnimatedShaftCount++;
+                FailedStateDrivenWorldBlockCount++;
+                DestroyUnityObject(blockRoot);
+                return false;
             }
+
+            if (hasKineticState)
+            {
+                rotatingVisuals.Add(
+                    new RotatingVisualState(
+                        modelRoot,
+                        ToUnityAxisVector(kineticState.Axis),
+                        DemoKineticResolver.ConvertToDegreesPerSecond(kineticState.Speed),
+                        DemoKineticResolver.GetRotationOffsetDegrees(entry.Position, kineticState.Axis)));
+                GeneratedAnimatedShaftCount++;
+            }
+
+            AddMeshColliders(blockRoot);
+            return true;
         }
 
         private void CreateItemCatalog(Transform root, MinecraftModelLoader itemModelLoader)
@@ -561,16 +614,14 @@ namespace Constructed.Unity
         private bool TryCreateCreativeMotorAssembly(
             Transform root,
             string name,
-            string label,
             Vector3 localPosition,
             Direction facing,
             float baseScale,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader,
-            bool animateShaft,
-            out bool createdShaft)
+            float shaftSpeed,
+            float shaftAngleOffset)
         {
-            createdShaft = false;
             if (modelLoader == null || blockStateLoader == null)
                 return false;
 
@@ -595,8 +646,18 @@ namespace Constructed.Unity
                 return false;
             }
 
-            createdShaft = TryCreateCreativeMotorHalfShaft(motorRoot.transform, facing, baseScale, modelLoader, animateShaft);
-            AddLabel(motorRoot.transform, label);
+            if (!TryCreateCreativeMotorHalfShaft(
+                    motorRoot.transform,
+                    facing,
+                    baseScale,
+                    modelLoader,
+                    shaftSpeed,
+                    shaftAngleOffset))
+            {
+                DestroyUnityObject(motorRoot);
+                return false;
+            }
+
             return true;
         }
 
@@ -644,7 +705,8 @@ namespace Constructed.Unity
             Direction facing,
             float baseScale,
             MinecraftModelLoader modelLoader,
-            bool animate)
+            float shaftSpeed,
+            float shaftAngleOffset)
         {
             try
             {
@@ -656,15 +718,19 @@ namespace Constructed.Unity
                 facingRoot.localRotation = Quaternion.FromToRotation(Vector3.forward, ToUnityDirectionVector(facing));
                 facingRoot.localScale = Vector3.one * baseScale;
 
-                Transform spinRoot = CreateChildRoot(facingRoot, animate ? "Spin" : "Model");
+                Transform spinRoot = CreateChildRoot(facingRoot, "Spin");
                 if (!TryCreateCombinedResolvedModel(spinRoot, model))
                 {
                     DestroyUnityObject(facingRoot.gameObject);
                     return false;
                 }
 
-                if (animate)
-                    rotatingVisuals.Add(new RotatingVisualState(spinRoot, GetCreativeMotorAnimationDegreesPerSecond(facing)));
+                rotatingVisuals.Add(
+                    new RotatingVisualState(
+                        spinRoot,
+                        Vector3.forward,
+                        DemoKineticResolver.ConvertToDegreesPerSecond(shaftSpeed),
+                        shaftAngleOffset));
 
                 return true;
             }
@@ -1413,6 +1479,20 @@ namespace Constructed.Unity
 
         private void ConfigureCamera()
         {
+            DemoMinecraftFirstPersonController playerController = FindAnyObjectByType<DemoMinecraftFirstPersonController>();
+            bool createdPlayer = false;
+            if (playerController == null)
+            {
+                GameObject playerObject = new GameObject(PlayerRootName);
+                playerObject.AddComponent<CharacterController>();
+                playerController = playerObject.AddComponent<DemoMinecraftFirstPersonController>();
+                createdPlayer = true;
+            }
+            else if (playerController.GetComponent<CharacterController>() == null)
+            {
+                playerController.gameObject.AddComponent<CharacterController>();
+            }
+
             Camera camera = Camera.main;
             if (camera == null)
             {
@@ -1422,21 +1502,34 @@ namespace Constructed.Unity
                 cameraObject.AddComponent<AudioListener>();
             }
 
-            EnsureFreeCameraController(camera);
-            camera.transform.position = new Vector3(8f, 12.5f, -11.5f);
-            camera.transform.rotation = Quaternion.Euler(52f, 0f, 0f);
-            camera.fieldOfView = 58f;
+            DemoFreeCameraController freeCamera = camera.GetComponent<DemoFreeCameraController>();
+            if (freeCamera != null)
+                freeCamera.enabled = false;
+
+            playerController.RefreshRigConfiguration();
+            playerController.SetPlayerCamera(camera);
+            EnsureCreativeBuildController(camera);
+            if (createdPlayer || !Application.isPlaying)
+            {
+                playerController.transform.position = new Vector3(1.5f, 1f, 4.5f);
+                playerController.SetViewAngles(90f, 12f);
+            }
+
+            camera.fieldOfView = DemoMinecraftFirstPersonController.DefaultFieldOfView;
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 200f;
         }
 
-        private static void EnsureFreeCameraController(Camera camera)
+        private void EnsureCreativeBuildController(Camera camera)
         {
             if (camera == null)
                 throw new ArgumentNullException(nameof(camera));
 
-            if (camera.GetComponent<DemoFreeCameraController>() == null)
-                camera.gameObject.AddComponent<DemoFreeCameraController>();
+            DemoCreativeBuildController controller = camera.GetComponent<DemoCreativeBuildController>();
+            if (controller == null)
+                controller = camera.gameObject.AddComponent<DemoCreativeBuildController>();
+
+            controller.SetPresenter(this);
         }
 
         private void ConfigureLight()
@@ -1533,8 +1626,10 @@ namespace Constructed.Unity
                 if (rotatingVisual.Transform == null)
                     continue;
 
-                float angle = Mathf.Repeat(timeSeconds * rotatingVisual.DegreesPerSecond, 360f);
-                rotatingVisual.Transform.localRotation = Quaternion.AngleAxis(angle, Vector3.forward);
+                float angle = Mathf.Repeat(
+                    (timeSeconds * rotatingVisual.DegreesPerSecond) + rotatingVisual.BaseAngleDegrees,
+                    360f);
+                rotatingVisual.Transform.localRotation = Quaternion.AngleAxis(angle, rotatingVisual.Axis);
             }
 
 #if UNITY_EDITOR
@@ -1544,6 +1639,25 @@ namespace Constructed.Unity
                 UnityEditor.SceneView.RepaintAll();
             }
 #endif
+        }
+
+        private static void AddMeshColliders(GameObject root)
+        {
+            if (root == null)
+                return;
+
+            MeshFilter[] meshFilters = root.GetComponentsInChildren<MeshFilter>(true);
+            foreach (MeshFilter meshFilter in meshFilters)
+            {
+                if (meshFilter == null || meshFilter.sharedMesh == null)
+                    continue;
+
+                MeshCollider meshCollider = meshFilter.GetComponent<MeshCollider>();
+                if (meshCollider == null)
+                    meshCollider = meshFilter.gameObject.AddComponent<MeshCollider>();
+
+                meshCollider.sharedMesh = meshFilter.sharedMesh;
+            }
         }
 
         private static Vector3 ToUnityDirectionVector(Direction direction)
@@ -1567,31 +1681,18 @@ namespace Constructed.Unity
             }
         }
 
-        private static float GetCreativeMotorAnimationDegreesPerSecond(Direction facing)
+        private static Vector3 ToUnityAxisVector(Axis axis)
         {
-            float degreesPerSecond = ConvertCreateSpeedToDegreesPerSecond(CreativeMotorDefaultGeneratedSpeedRpm);
-            return IsPositiveAxisDirection(facing) ? degreesPerSecond : -degreesPerSecond;
-        }
-
-        private static float ConvertCreateSpeedToDegreesPerSecond(float speedRpm)
-        {
-            return speedRpm * 360f / 60f;
-        }
-
-        private static bool IsPositiveAxisDirection(Direction direction)
-        {
-            switch (direction)
+            switch (axis)
             {
-                case Direction.Up:
-                case Direction.South:
-                case Direction.East:
-                    return true;
-                case Direction.Down:
-                case Direction.North:
-                case Direction.West:
-                    return false;
+                case Axis.X:
+                    return Vector3.right;
+                case Axis.Y:
+                    return Vector3.up;
+                case Axis.Z:
+                    return Vector3.forward;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
+                    throw new ArgumentOutOfRangeException(nameof(axis), axis, null);
             }
         }
 
@@ -1866,15 +1967,21 @@ namespace Constructed.Unity
 
         private sealed class RotatingVisualState
         {
-            public RotatingVisualState(Transform transform, float degreesPerSecond)
+            public RotatingVisualState(Transform transform, Vector3 axis, float degreesPerSecond, float baseAngleDegrees)
             {
                 Transform = transform;
+                Axis = axis;
                 DegreesPerSecond = degreesPerSecond;
+                BaseAngleDegrees = baseAngleDegrees;
             }
 
             public Transform Transform { get; }
 
+            public Vector3 Axis { get; }
+
             public float DegreesPerSecond { get; }
+
+            public float BaseAngleDegrees { get; }
         }
 
         private static void DestroyUnityObject(UnityEngine.Object target)

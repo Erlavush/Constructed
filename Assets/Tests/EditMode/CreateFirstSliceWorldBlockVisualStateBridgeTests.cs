@@ -104,7 +104,7 @@ namespace Constructed.Tests
                 supportedPlacements++;
             }
 
-            Assert.AreEqual(6, supportedPlacements);
+            Assert.AreEqual(3, supportedPlacements);
         }
 
         private static void AssertBridgeProperties(BlockState state, BlockStatePropertyValue[] expectedProperties)

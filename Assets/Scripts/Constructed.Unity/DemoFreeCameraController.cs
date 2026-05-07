@@ -1,5 +1,3 @@
-using System;
-using System.Reflection;
 using UnityEngine;
 
 namespace Constructed.Unity
@@ -23,6 +21,8 @@ namespace Constructed.Unity
         private float yawDegrees;
         private float pitchDegrees;
         private bool hasLookState;
+
+        public bool InputEnabled { get; set; } = true;
 
         private void OnEnable()
         {
@@ -48,6 +48,12 @@ namespace Constructed.Unity
             if (!hasLookState)
                 SyncLookStateFromTransform();
 
+            if (!InputEnabled)
+            {
+                UnlockCursor();
+                return;
+            }
+
             UpdateCursorLockState();
             UpdateLook();
             UpdateMovement();
@@ -55,18 +61,13 @@ namespace Constructed.Unity
 
         private void UpdateCursorLockState()
         {
-            object keyboard = GetKeyboardDevice();
-            object mouse = GetMouseDevice();
-            if (keyboard == null || mouse == null)
-                return;
-
-            if (GetButtonState(keyboard, "escapeKey", "wasPressedThisFrame"))
+            if (DemoInputSystemAdapter.WasKeyPressedThisFrame("escapeKey"))
             {
                 UnlockCursor();
                 return;
             }
 
-            if (GetButtonState(mouse, "rightButton", "isPressed"))
+            if (DemoInputSystemAdapter.IsMouseButtonPressed(DemoMouseButton.Middle))
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
@@ -79,11 +80,10 @@ namespace Constructed.Unity
 
         private void UpdateLook()
         {
-            object mouse = GetMouseDevice();
-            if (mouse == null || !GetButtonState(mouse, "rightButton", "isPressed"))
+            if (!DemoInputSystemAdapter.IsMouseButtonPressed(DemoMouseButton.Middle))
                 return;
 
-            Vector2 mouseDelta = ReadVector2Control(mouse, "delta");
+            Vector2 mouseDelta = DemoInputSystemAdapter.ReadMouseDelta();
             yawDegrees += mouseDelta.x * lookSensitivity;
             pitchDegrees -= mouseDelta.y * lookSensitivity;
             pitchDegrees = Mathf.Clamp(pitchDegrees, -89f, 89f);
@@ -92,33 +92,29 @@ namespace Constructed.Unity
 
         private void UpdateMovement()
         {
-            object keyboard = GetKeyboardDevice();
-            if (keyboard == null)
-                return;
-
             Vector3 movement = Vector3.zero;
-            if (GetButtonState(keyboard, "wKey", "isPressed"))
+            if (DemoInputSystemAdapter.IsKeyPressed("wKey"))
                 movement += transform.forward;
-            if (GetButtonState(keyboard, "sKey", "isPressed"))
+            if (DemoInputSystemAdapter.IsKeyPressed("sKey"))
                 movement -= transform.forward;
-            if (GetButtonState(keyboard, "dKey", "isPressed"))
+            if (DemoInputSystemAdapter.IsKeyPressed("dKey"))
                 movement += transform.right;
-            if (GetButtonState(keyboard, "aKey", "isPressed"))
+            if (DemoInputSystemAdapter.IsKeyPressed("aKey"))
                 movement -= transform.right;
-            if (GetButtonState(keyboard, "eKey", "isPressed") || GetButtonState(keyboard, "spaceKey", "isPressed"))
+            if (DemoInputSystemAdapter.IsKeyPressed("spaceKey"))
                 movement += transform.up;
-            if (GetButtonState(keyboard, "qKey", "isPressed") ||
-                GetButtonState(keyboard, "leftCtrlKey", "isPressed") ||
-                GetButtonState(keyboard, "rightCtrlKey", "isPressed") ||
-                GetButtonState(keyboard, "cKey", "isPressed"))
+            if (DemoInputSystemAdapter.IsKeyPressed("qKey") ||
+                DemoInputSystemAdapter.IsKeyPressed("leftCtrlKey") ||
+                DemoInputSystemAdapter.IsKeyPressed("rightCtrlKey") ||
+                DemoInputSystemAdapter.IsKeyPressed("cKey"))
                 movement -= transform.up;
 
             if (movement.sqrMagnitude <= 0f)
                 return;
 
             float speedMultiplier =
-                GetButtonState(keyboard, "leftShiftKey", "isPressed") ||
-                GetButtonState(keyboard, "rightShiftKey", "isPressed")
+                DemoInputSystemAdapter.IsKeyPressed("leftShiftKey") ||
+                DemoInputSystemAdapter.IsKeyPressed("rightShiftKey")
                     ? fastMoveMultiplier
                     : 1f;
             transform.position += movement.normalized * (moveSpeed * speedMultiplier * Time.unscaledDeltaTime);
@@ -135,56 +131,6 @@ namespace Constructed.Unity
         private static float NormalizeSignedAngle(float degrees)
         {
             return degrees > 180f ? degrees - 360f : degrees;
-        }
-
-        // Use reflection so this demo helper can talk to the installed Input System package
-        // without adding a brittle asmdef/package reference edge to the current workspace.
-        private static object GetKeyboardDevice()
-        {
-            Type keyboardType = Type.GetType("UnityEngine.InputSystem.Keyboard, Unity.InputSystem");
-            return keyboardType?.GetProperty("current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        }
-
-        private static object GetMouseDevice()
-        {
-            Type mouseType = Type.GetType("UnityEngine.InputSystem.Mouse, Unity.InputSystem");
-            return mouseType?.GetProperty("current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        }
-
-        private static bool GetButtonState(object device, string controlPropertyName, string statePropertyName)
-        {
-            object control = GetPropertyValue(device, controlPropertyName);
-            if (control == null)
-                return false;
-
-            object value = control.GetType().GetProperty(statePropertyName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(control);
-            return value is bool pressed && pressed;
-        }
-
-        private static Vector2 ReadVector2Control(object device, string controlPropertyName)
-        {
-            object control = GetPropertyValue(device, controlPropertyName);
-            if (control == null)
-                return Vector2.zero;
-
-            object xControl = GetPropertyValue(control, "x");
-            object yControl = GetPropertyValue(control, "y");
-            return new Vector2(ReadFloatControl(xControl), ReadFloatControl(yControl));
-        }
-
-        private static float ReadFloatControl(object control)
-        {
-            if (control == null)
-                return 0f;
-
-            MethodInfo readValueMethod = control.GetType().GetMethod("ReadValue", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
-            object value = readValueMethod?.Invoke(control, null);
-            return value is float floatValue ? floatValue : 0f;
-        }
-
-        private static object GetPropertyValue(object target, string propertyName)
-        {
-            return target?.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(target);
         }
 
         private static void UnlockCursor()

@@ -8,18 +8,13 @@ namespace Constructed.Create
     public static class DemoVerticalSliceBootstrap
     {
         public const int ChunkSize = 16;
+        public const int PlatformSize = 8;
         public const int SurfaceY = 0;
         public const int MachineY = 1;
-        public const int CrateY = 2;
 
-        public static readonly BlockPos CreativeMotorPosition = new BlockPos(2, MachineY, 8);
-        public static readonly BlockPos FirstShaftPosition = new BlockPos(3, MachineY, 8);
-        public static readonly BlockPos SecondShaftPosition = new BlockPos(4, MachineY, 8);
-        public static readonly BlockPos BeltStartPosition = new BlockPos(5, MachineY, 8);
-        public static readonly BlockPos BeltEndPosition = new BlockPos(10, MachineY, 8);
-        public static readonly BlockPos CreativeCratePosition = new BlockPos(5, CrateY, 8);
-        public static readonly BlockPos FunnelPosition = new BlockPos(11, MachineY, 8);
-        public static readonly BlockPos ItemVaultPosition = new BlockPos(12, MachineY, 8);
+        public static readonly BlockPos CreativeMotorPosition = new BlockPos(2, MachineY, 4);
+        public static readonly BlockPos FirstShaftPosition = new BlockPos(3, MachineY, 4);
+        public static readonly BlockPos SecondShaftPosition = new BlockPos(4, MachineY, 4);
 
         public static BlockWorld CreateFlatSurfaceWorld(DemoContentCatalog catalog)
         {
@@ -54,23 +49,6 @@ namespace Constructed.Create
                 SecondShaftPosition,
                 catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X)));
 
-            for (int x = BeltStartPosition.X; x <= BeltEndPosition.X; x++)
-            {
-                placements.Add(new WorldBlockEntry(
-                    new BlockPos(x, MachineY, BeltStartPosition.Z),
-                    catalog.Belt.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East)));
-            }
-
-            placements.Add(new WorldBlockEntry(
-                CreativeCratePosition,
-                catalog.CreativeCrate.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.Down)));
-            placements.Add(new WorldBlockEntry(
-                FunnelPosition,
-                catalog.BrassFunnel.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East)));
-            placements.Add(new WorldBlockEntry(
-                ItemVaultPosition,
-                catalog.ItemVault.DefaultState.With(ItemVaultBlock.HorizontalAxisProperty, Axis.X)));
-
             return placements;
         }
 
@@ -81,9 +59,9 @@ namespace Constructed.Create
             if (catalog == null)
                 throw new ArgumentNullException(nameof(catalog));
 
-            for (int x = 0; x < ChunkSize; x++)
+            for (int x = 0; x < PlatformSize; x++)
             {
-                for (int z = 0; z < ChunkSize; z++)
+                for (int z = 0; z < PlatformSize; z++)
                     world.SetBlockState(new BlockPos(x, SurfaceY, z), catalog.Surface.DefaultState);
             }
         }

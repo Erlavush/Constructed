@@ -1,0 +1,80 @@
+using Constructed.Core;
+using Constructed.Create;
+using Constructed.Minecraft;
+using NUnit.Framework;
+
+namespace Constructed.Tests
+{
+    public sealed class DemoKineticPlacementRulesTests
+    {
+        [Test]
+        public void CreativeMotorPlacementFacesTowardCompatibleNeighborShaft()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            BlockPos placementPosition = new BlockPos(4, DemoVerticalSliceBootstrap.MachineY, 4);
+            world.SetBlockState(
+                placementPosition.Relative(Direction.East),
+                catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+
+            Direction facing = DemoKineticPlacementRules.ResolveCreativeMotorFacing(
+                catalog,
+                world,
+                placementPosition,
+                Direction.North);
+
+            Assert.AreEqual(Direction.East, facing);
+        }
+
+        [Test]
+        public void CreativeMotorPlacementFallsBackToOppositeNearestLookingDirection()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+
+            Direction facing = DemoKineticPlacementRules.ResolveCreativeMotorFacing(
+                catalog,
+                world,
+                new BlockPos(4, DemoVerticalSliceBootstrap.MachineY, 4),
+                Direction.North);
+
+            Assert.AreEqual(Direction.South, facing);
+        }
+
+        [Test]
+        public void ShaftPlacementPrefersCompatibleNeighborAxis()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            BlockPos placementPosition = new BlockPos(4, DemoVerticalSliceBootstrap.MachineY, 4);
+            world.SetBlockState(
+                placementPosition.Relative(Direction.West),
+                catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+
+            Axis axis = DemoKineticPlacementRules.ResolveShaftAxis(
+                catalog,
+                world,
+                placementPosition,
+                Direction.Up);
+
+            Assert.AreEqual(Axis.X, axis);
+        }
+
+        [Test]
+        public void CreatePlacementStateBuildsDefaultShaftFromLookAxisWhenNoNeighborMatches()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+
+            BlockState placementState = DemoKineticPlacementRules.CreatePlacementState(
+                catalog,
+                world,
+                catalog.Shaft.Id,
+                new BlockPos(4, DemoVerticalSliceBootstrap.MachineY, 4),
+                Direction.Up);
+
+            Assert.AreEqual(catalog.Shaft.Id, placementState.Definition.Id);
+            Assert.AreEqual(Axis.Y, placementState.Get(DemoContentCatalog.AxisProperty));
+        }
+    }
+}
