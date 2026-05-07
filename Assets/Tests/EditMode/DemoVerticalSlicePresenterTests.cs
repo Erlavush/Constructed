@@ -244,6 +244,32 @@ namespace Constructed.Tests
             }
         }
 
+        [Test]
+        public void PresenterPlacesGrassBlockThroughBuildPlacementPath()
+        {
+            GameObject presenterObject = new GameObject("Presenter Grass Placement Test");
+            try
+            {
+                DemoVerticalSlicePresenter presenter = presenterObject.AddComponent<DemoVerticalSlicePresenter>();
+                presenter.Rebuild();
+
+                Constructed.Core.BlockPos placementPosition =
+                    new Constructed.Core.BlockPos(0, DemoVerticalSliceBootstrap.MachineY, 0);
+
+                Assert.IsTrue(presenter.TryPlaceBlock(DemoContentCatalog.SurfaceBlockId, placementPosition, Constructed.Core.Direction.North));
+                Assert.AreSame(presenter.Catalog.Surface, presenter.World.GetBlockState(placementPosition).Definition);
+                Assert.AreEqual(68, presenter.GeneratedBlockCount);
+                Assert.AreEqual(3, presenter.GeneratedStateDrivenWorldBlockCount);
+            }
+            finally
+            {
+                Object.DestroyImmediate(presenterObject);
+                DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
+                DestroyIfFound("Directional Light");
+            }
+        }
+
         private static void AssertSurfaceTexture(Texture2D texture)
         {
             Assert.NotNull(texture);

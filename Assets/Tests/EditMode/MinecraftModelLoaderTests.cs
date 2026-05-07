@@ -79,9 +79,27 @@ namespace Constructed.Tests
                 model.Elements[0].Faces[Direction.North].TextureId);
         }
 
+        [Test]
+        public void ExtractedMinecraftResourceMirrorLoadsGrassBlockItemModel()
+        {
+            MinecraftResolvedModel model = CreateVanillaResourceLoader().LoadItemModel(ResourceLocation.Parse("minecraft:grass_block"));
+
+            Assert.IsFalse(model.UsesGeneratedItemLayers);
+            Assert.AreEqual(2, model.Elements.Count);
+            AssertResolvedTexture(model, "top", "minecraft:block/grass_block_top");
+            AssertResolvedTexture(model, "side", "minecraft:block/grass_block_side");
+            AssertResolvedTexture(model, "overlay", "minecraft:block/grass_block_side_overlay");
+            AssertResolvedTexture(model, "bottom", "minecraft:block/dirt");
+        }
+
         private static MinecraftModelLoader CreateLoader()
         {
             return new MinecraftModelLoader(CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(GetProjectRoot()));
+        }
+
+        private static MinecraftModelLoader CreateVanillaResourceLoader()
+        {
+            return new MinecraftModelLoader(Path.Combine(GetProjectRoot(), "References/Minecraft-1.21.1-resources"));
         }
 
         private static string GetProjectRoot()

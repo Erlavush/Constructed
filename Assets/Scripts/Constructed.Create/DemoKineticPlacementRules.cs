@@ -21,7 +21,9 @@ namespace Constructed.Create
             if (catalog == null)
                 throw new ArgumentNullException(nameof(catalog));
 
-            return blockId == catalog.CreativeMotor.Id || blockId == catalog.Shaft.Id;
+            return blockId == catalog.CreativeMotor.Id ||
+                blockId == catalog.Shaft.Id ||
+                blockId == catalog.Surface.Id;
         }
 
         public static BlockState CreatePlacementState(
@@ -47,6 +49,9 @@ namespace Constructed.Create
                 Axis axis = ResolveShaftAxis(catalog, world, position, nearestLookingDirection);
                 return catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, axis);
             }
+
+            if (blockId == catalog.Surface.Id)
+                return catalog.Surface.DefaultState;
 
             throw new InvalidOperationException($"No placement rule exists for {blockId} in the current demo slice.");
         }

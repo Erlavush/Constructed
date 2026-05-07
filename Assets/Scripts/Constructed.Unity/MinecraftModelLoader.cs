@@ -293,6 +293,22 @@ namespace Constructed.Unity
             if (File.Exists(mainPath))
                 return mainPath;
 
+            string extractedResourcePath = Path.Combine(
+                assetRoot,
+                "assets",
+                modelId.Namespace,
+                "models",
+                relativePath);
+            if (File.Exists(extractedResourcePath))
+                return extractedResourcePath;
+
+            string namespaceAssetPath = Path.Combine(
+                assetRoot,
+                "models",
+                relativePath);
+            if (File.Exists(namespaceAssetPath))
+                return namespaceAssetPath;
+
             throw new FileNotFoundException("Could not find Minecraft model JSON for " + modelId + " under " + assetRoot + ".", mainPath);
         }
 

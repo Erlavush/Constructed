@@ -385,15 +385,25 @@ namespace Constructed.Unity
                 inventoryEntries.Add(inventoryEntry);
                 inventoryEntriesById[entry.ItemId] = inventoryEntry;
             }
+
+            BuildInventoryEntry grassBlockEntry = new BuildInventoryEntry(
+                DemoContentCatalog.SurfaceBlockId,
+                "Grass Block",
+                ResourceLocation.Parse("minecraft:item/grass_block"),
+                null,
+                true);
+            inventoryEntries.Add(grassBlockEntry);
+            inventoryEntriesById[grassBlockEntry.Id] = grassBlockEntry;
         }
 
         private void EnsureDefaultHotbarInitialized()
         {
-            if (hotbarSlots[0].HasValue || hotbarSlots[1].HasValue)
-                return;
-
-            hotbarSlots[0] = DemoContentCatalog.CreativeMotorBlockId;
-            hotbarSlots[1] = DemoContentCatalog.ShaftBlockId;
+            if (!hotbarSlots[0].HasValue)
+                hotbarSlots[0] = DemoContentCatalog.CreativeMotorBlockId;
+            if (!hotbarSlots[1].HasValue)
+                hotbarSlots[1] = DemoContentCatalog.ShaftBlockId;
+            if (!hotbarSlots[2].HasValue)
+                hotbarSlots[2] = DemoContentCatalog.SurfaceBlockId;
         }
 
         private bool TryRaycastWorld(Camera camera, out DemoWorldHit hit)
@@ -657,7 +667,7 @@ namespace Constructed.Unity
                 Id = id;
                 Label = label;
                 PreviewModelId = previewModelId;
-                FallbackIconFile = fallbackIconFile ?? throw new ArgumentNullException(nameof(fallbackIconFile));
+                FallbackIconFile = fallbackIconFile;
                 Placeable = placeable;
             }
 
@@ -677,15 +687,21 @@ namespace Constructed.Unity
             private const int RenderResolution = 64;
             private const float IconPaddingPixels = 6f;
             private const float FrontFaceCullThreshold = 0.0001f;
+            private const float DepthEqualThreshold = 0.00001f;
             private const byte AlphaClipThreshold = 8;
             private const float ItemPreviewBaseScale = 1.6f;
+            private const string MinecraftAssetRootRelativePath = "References/Minecraft-1.21.1-resources";
             private const string MinecraftTextureRootRelativePath = "References/Minecraft-1.21.1-resources/assets/minecraft/textures";
 
             private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
                 new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
+            private static readonly Color32 DefaultMinecraftGrassTint = new Color32(124, 189, 107, 255);
+            private static readonly ResourceLocation GrassBlockTopTextureId = ResourceLocation.Parse("minecraft:block/grass_block_top");
+            private static readonly ResourceLocation GrassBlockSideOverlayTextureId = ResourceLocation.Parse("minecraft:block/grass_block_side_overlay");
 
             private readonly string privateCreateAssetRoot;
             private readonly string referenceCreateAssetRoot;
+            private readonly string minecraftAssetRoot;
             private readonly string minecraftTextureRoot;
             private readonly Dictionary<ResourceLocation, Texture2D> iconTexturesById =
                 new Dictionary<ResourceLocation, Texture2D>();
@@ -694,6 +710,7 @@ namespace Constructed.Unity
 
             private MinecraftModelLoader privateModelLoader;
             private MinecraftModelLoader referenceModelLoader;
+            private MinecraftModelLoader minecraftModelLoader;
             private Texture2D missingTexture;
 
             public ModelBackedIconRenderer(string projectRoot)
@@ -703,6 +720,7 @@ namespace Constructed.Unity
 
                 privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
                 referenceCreateAssetRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot);
+                minecraftAssetRoot = Path.Combine(projectRoot, MinecraftAssetRootRelativePath.Replace('/', Path.DirectorySeparatorChar));
                 minecraftTextureRoot = Path.Combine(projectRoot, MinecraftTextureRootRelativePath.Replace('/', Path.DirectorySeparatorChar));
             }
 
@@ -770,7 +788,11 @@ namespace Constructed.Unity
                 if (TryLoadItemModel(privateCreateAssetRoot, ref privateModelLoader, modelId, out model))
                     return true;
 
-                return TryLoadItemModel(referenceCreateAssetRoot, ref referenceModelLoader, modelId, out model);
+                if (TryLoadItemModel(referenceCreateAssetRoot, ref referenceModelLoader, modelId, out model))
+                    return true;
+
+                return modelId.Namespace == "minecraft" &&
+                    TryLoadItemModel(minecraftAssetRoot, ref minecraftModelLoader, modelId, out model);
             }
 
             private static bool TryLoadItemModel(
@@ -872,6 +894,12 @@ namespace Constructed.Unity
                 if (sourceTexturesByKey.TryGetValue(cacheKey, out Texture2D cachedTexture))
                     return cachedTexture;
 
+                if (TryCreateTintedMinecraftModelTexture(textureId, out Texture2D tintedTexture))
+                {
+                    sourceTexturesByKey[cacheKey] = tintedTexture;
+                    return tintedTexture;
+                }
+
                 string texturePath = ResolveTexturePath(textureId);
                 if (!string.IsNullOrEmpty(texturePath) && File.Exists(texturePath))
                 {
@@ -914,8 +942,30 @@ namespace Constructed.Unity
                 return null;
             }
 
+            private bool TryCreateTintedMinecraftModelTexture(ResourceLocation textureId, out Texture2D texture)
+            {
+                texture = null;
+                if (textureId != GrassBlockTopTextureId && textureId != GrassBlockSideOverlayTextureId)
+                    return false;
+
+                string texturePath = ResolveTexturePath(textureId);
+                if (string.IsNullOrEmpty(texturePath) || !File.Exists(texturePath))
+                    return false;
+
+                Texture2D sourceTexture = LoadTextureFromPath(texturePath);
+                if (sourceTexture == null)
+                    return false;
+
+                texture = CreateTintedTexture(sourceTexture, DefaultMinecraftGrassTint);
+                texture.name = "Tinted " + textureId.Path;
+                return true;
+            }
+
             private Texture2D LoadFallbackTexture(CreatePrivateAssetFileReference fallbackIconFile)
             {
+                if (fallbackIconFile == null)
+                    return GetMissingTexture();
+
                 string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateCreateAssetRoot, fallbackIconFile);
                 if (File.Exists(privatePath))
                     return LoadTextureFromPath(privatePath);
@@ -1085,7 +1135,8 @@ namespace Constructed.Unity
 
                         float depth = (a.z * w0) + (b.z * w1) + (c.z * w2);
                         int pixelIndex = (y * RenderResolution) + x;
-                        if (depth <= depthBuffer[pixelIndex])
+                        float currentDepth = depthBuffer[pixelIndex];
+                        if (depth < currentDepth - DepthEqualThreshold)
                             continue;
 
                         Vector2 uv = (uvA * w0) + (uvB * w1) + (uvC * w2);
@@ -1093,8 +1144,17 @@ namespace Constructed.Unity
                         if (sample.a <= AlphaClipThreshold)
                             continue;
 
-                        pixels[pixelIndex] = sample;
-                        depthBuffer[pixelIndex] = depth;
+                        if (depth <= currentDepth + DepthEqualThreshold && pixels[pixelIndex].a > 0)
+                        {
+                            pixels[pixelIndex] = AlphaBlend(pixels[pixelIndex], sample);
+                            if (depth > currentDepth)
+                                depthBuffer[pixelIndex] = depth;
+                        }
+                        else
+                        {
+                            pixels[pixelIndex] = sample;
+                            depthBuffer[pixelIndex] = depth;
+                        }
                     }
                 }
             }
@@ -1265,6 +1325,32 @@ namespace Constructed.Unity
                 }
 
                 return uvs;
+            }
+
+            private static Texture2D CreateTintedTexture(Texture2D sourceTexture, Color32 tint)
+            {
+                Texture2D texture = new Texture2D(sourceTexture.width, sourceTexture.height, TextureFormat.RGBA32, false);
+                Color32[] sourcePixels = sourceTexture.GetPixels32();
+                Color32[] tintedPixels = new Color32[sourcePixels.Length];
+                for (int i = 0; i < sourcePixels.Length; i++)
+                {
+                    Color32 sourcePixel = sourcePixels[i];
+                    tintedPixels[i] = new Color32(
+                        MultiplyByte(sourcePixel.r, tint.r),
+                        MultiplyByte(sourcePixel.g, tint.g),
+                        MultiplyByte(sourcePixel.b, tint.b),
+                        sourcePixel.a);
+                }
+
+                texture.SetPixels32(tintedPixels);
+                ConfigureTexture(texture);
+                texture.Apply(false, false);
+                return texture;
+            }
+
+            private static byte MultiplyByte(byte first, byte second)
+            {
+                return (byte)((first * second) / 255);
             }
 
             private static Color32 AlphaBlend(Color32 basePixel, Color32 overlayPixel)

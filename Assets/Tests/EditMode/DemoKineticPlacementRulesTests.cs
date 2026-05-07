@@ -76,5 +76,23 @@ namespace Constructed.Tests
             Assert.AreEqual(catalog.Shaft.Id, placementState.Definition.Id);
             Assert.AreEqual(Axis.Y, placementState.Get(DemoContentCatalog.AxisProperty));
         }
+
+        [Test]
+        public void CreatePlacementStateBuildsDefaultGrassBlock()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+
+            Assert.IsTrue(DemoKineticPlacementRules.IsPlaceableBlock(catalog, catalog.Surface.Id));
+
+            BlockState placementState = DemoKineticPlacementRules.CreatePlacementState(
+                catalog,
+                world,
+                catalog.Surface.Id,
+                new BlockPos(0, DemoVerticalSliceBootstrap.MachineY, 0),
+                Direction.North);
+
+            Assert.AreSame(catalog.Surface, placementState.Definition);
+        }
     }
 }
