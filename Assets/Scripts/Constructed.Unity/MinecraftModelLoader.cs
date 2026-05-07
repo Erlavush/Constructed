@@ -120,7 +120,8 @@ namespace Constructed.Unity
             IEnumerable<MinecraftModelElement> elements,
             Vector2 textureSize,
             MinecraftModelDisplayTransform guiDisplay,
-            bool usesGeneratedItemLayers)
+            bool usesGeneratedItemLayers,
+            bool usesBlockLight)
         {
             if (string.IsNullOrEmpty(modelId.Namespace) || string.IsNullOrEmpty(modelId.Path))
                 throw new ArgumentException("Resolved model id must be initialized.", nameof(modelId));
@@ -140,6 +141,7 @@ namespace Constructed.Unity
             TextureSize = textureSize;
             GuiDisplay = guiDisplay;
             UsesGeneratedItemLayers = usesGeneratedItemLayers;
+            UsesBlockLight = usesBlockLight;
         }
 
         public ResourceLocation ModelId { get; }
@@ -159,6 +161,8 @@ namespace Constructed.Unity
         public MinecraftModelDisplayTransform GuiDisplay { get; }
 
         public bool UsesGeneratedItemLayers { get; }
+
+        public bool UsesBlockLight { get; }
 
         public bool HasGuiDisplay
         {
@@ -263,7 +267,8 @@ namespace Constructed.Unity
                 elements,
                 merged.TextureSize,
                 guiDisplay,
-                merged.UsesGeneratedItemLayers);
+                merged.UsesGeneratedItemLayers,
+                merged.UsesBlockLight);
         }
 
         private string ResolveModelAbsolutePath(ResourceLocation modelId)
@@ -330,8 +335,9 @@ namespace Constructed.Unity
             Vector2? textureSize = ParseTextureSize(
                 MinecraftJsonParser.TryGetArray(root, "texture_size", out List<object> textureSizeArray) ? textureSizeArray : null,
                 absolutePath);
+            bool? usesBlockLight = ParseGuiLight(root, absolutePath);
 
-            return new RawModelDocument(parentId, textures, elements, displayTransforms, textureSize);
+            return new RawModelDocument(parentId, textures, elements, displayTransforms, textureSize, usesBlockLight);
         }
 
         private static Dictionary<string, string> ParseTextureReferences(Dictionary<string, object> texturesObject)
@@ -360,6 +366,22 @@ namespace Constructed.Unity
                 throw new InvalidDataException("Model texture_size must contain exactly two numbers in " + sourcePath + ".");
 
             return new Vector2(ReadFloat(textureSizeArray[0]), ReadFloat(textureSizeArray[1]));
+        }
+
+        private static bool? ParseGuiLight(Dictionary<string, object> root, string sourcePath)
+        {
+            if (!MinecraftJsonParser.TryGetString(root, "gui_light", out string guiLight))
+                return null;
+
+            switch (guiLight)
+            {
+                case "side":
+                    return true;
+                case "front":
+                    return false;
+                default:
+                    throw new InvalidDataException("Unsupported gui_light '" + guiLight + "' in " + sourcePath + ".");
+            }
         }
 
         private static List<ModelElementTemplate> ParseElements(List<object> elementsArray, string sourcePath)
@@ -652,13 +674,15 @@ namespace Constructed.Unity
                 Dictionary<string, string> textureReferences,
                 List<ModelElementTemplate> elements,
                 Dictionary<string, MinecraftModelDisplayTransform> displayTransforms,
-                Vector2? textureSize)
+                Vector2? textureSize,
+                bool? usesBlockLight)
             {
                 ParentModelId = parentModelId;
                 TextureReferences = textureReferences ?? new Dictionary<string, string>(StringComparer.Ordinal);
                 Elements = elements;
                 DisplayTransforms = displayTransforms ?? new Dictionary<string, MinecraftModelDisplayTransform>(StringComparer.Ordinal);
                 TextureSize = textureSize;
+                UsesBlockLight = usesBlockLight;
             }
 
             public ResourceLocation? ParentModelId { get; }
@@ -670,6 +694,8 @@ namespace Constructed.Unity
             public Dictionary<string, MinecraftModelDisplayTransform> DisplayTransforms { get; }
 
             public Vector2? TextureSize { get; }
+
+            public bool? UsesBlockLight { get; }
         }
 
         private sealed class MergedModelState
@@ -680,7 +706,8 @@ namespace Constructed.Unity
                 List<ModelElementTemplate> elementTemplates,
                 Dictionary<string, MinecraftModelDisplayTransform> displayTransforms,
                 Vector2 textureSize,
-                bool usesGeneratedItemLayers)
+                bool usesGeneratedItemLayers,
+                bool usesBlockLight)
             {
                 ModelId = modelId;
                 TextureReferences = textureReferences;
@@ -688,6 +715,7 @@ namespace Constructed.Unity
                 DisplayTransforms = displayTransforms;
                 TextureSize = textureSize;
                 UsesGeneratedItemLayers = usesGeneratedItemLayers;
+                UsesBlockLight = usesBlockLight;
             }
 
             public ResourceLocation ModelId { get; }
@@ -702,15 +730,18 @@ namespace Constructed.Unity
 
             public bool UsesGeneratedItemLayers { get; }
 
+            public bool UsesBlockLight { get; }
+
             public static MergedModelState CreateBuiltinBlock(ResourceLocation modelId)
             {
                 return new MergedModelState(
                     modelId,
                     new Dictionary<string, string>(StringComparer.Ordinal),
                     null,
-                    new Dictionary<string, MinecraftModelDisplayTransform>(StringComparer.Ordinal),
+                    CreateBuiltinBlockDisplayTransforms(),
                     new Vector2(16f, 16f),
-                    false);
+                    false,
+                    true);
             }
 
             public static MergedModelState CreateBuiltinGeneratedItem(ResourceLocation modelId)
@@ -721,7 +752,8 @@ namespace Constructed.Unity
                     null,
                     new Dictionary<string, MinecraftModelDisplayTransform>(StringComparer.Ordinal),
                     new Vector2(16f, 16f),
-                    true);
+                    true,
+                    false);
             }
 
             public static MergedModelState Merge(
@@ -746,6 +778,7 @@ namespace Constructed.Unity
                 bool usesGeneratedItemLayers = rawModel.ParentModelId.HasValue && rawModel.ParentModelId.Value == GeneratedItemModelId;
                 if (parentState != null && parentState.UsesGeneratedItemLayers)
                     usesGeneratedItemLayers = true;
+                bool usesBlockLight = rawModel.UsesBlockLight ?? (parentState != null ? parentState.UsesBlockLight : true);
 
                 return new MergedModelState(
                     modelId,
@@ -753,7 +786,22 @@ namespace Constructed.Unity
                     mergedElements,
                     mergedDisplayTransforms,
                     textureSize,
-                    usesGeneratedItemLayers);
+                    usesGeneratedItemLayers,
+                    usesBlockLight);
+            }
+
+            private static Dictionary<string, MinecraftModelDisplayTransform> CreateBuiltinBlockDisplayTransforms()
+            {
+                return new Dictionary<string, MinecraftModelDisplayTransform>(StringComparer.Ordinal)
+                {
+                    {
+                        "gui",
+                        new MinecraftModelDisplayTransform(
+                            new Vector3(30f, 225f, 0f),
+                            Vector3.zero,
+                            new Vector3(0.625f, 0.625f, 0.625f))
+                    }
+                };
             }
         }
 

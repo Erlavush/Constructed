@@ -690,6 +690,8 @@ namespace Constructed.Unity
             private const float DepthEqualThreshold = 0.00001f;
             private const byte AlphaClipThreshold = 8;
             private const float ItemPreviewBaseScale = 1.6f;
+            private const float MinecraftLightPower = 0.6f;
+            private const float MinecraftAmbientLight = 0.4f;
             private const string MinecraftAssetRootRelativePath = "References/Minecraft-1.21.1-resources";
             private const string MinecraftTextureRootRelativePath = "References/Minecraft-1.21.1-resources/assets/minecraft/textures";
 
@@ -698,6 +700,10 @@ namespace Constructed.Unity
             private static readonly Color32 DefaultMinecraftGrassTint = new Color32(124, 189, 107, 255);
             private static readonly ResourceLocation GrassBlockTopTextureId = ResourceLocation.Parse("minecraft:block/grass_block_top");
             private static readonly ResourceLocation GrassBlockSideOverlayTextureId = ResourceLocation.Parse("minecraft:block/grass_block_side_overlay");
+            private static readonly Vector3 MinecraftGui3DLight0 = new Vector3(-0.933439195f, -0.262694716f, -0.244300157f);
+            private static readonly Vector3 MinecraftGui3DLight1 = new Vector3(-0.103571370f, -0.976606786f, 0.188446417f);
+            private static readonly Vector3 MinecraftGuiFlatLight0 = new Vector3(-0.222518995f, -0.171498626f, 0.959725678f);
+            private static readonly Vector3 MinecraftGuiFlatLight1 = new Vector3(-0.215012133f, -0.971825242f, 0.096567802f);
 
             private readonly string privateCreateAssetRoot;
             private readonly string referenceCreateAssetRoot;
@@ -873,9 +879,11 @@ namespace Constructed.Unity
                         if (texture == null)
                             continue;
 
-                        SoftwareIconFace iconFace = new SoftwareIconFace(vertices, CreateModelFaceUvs(face, model.TextureSize), texture);
+                        Vector3 normal = CalculateFaceNormal(vertices);
+                        float lightMultiplier = CalculateMinecraftGuiLighting(normal, model.UsesBlockLight);
+                        SoftwareIconFace iconFace = new SoftwareIconFace(vertices, CreateModelFaceUvs(face, model.TextureSize), texture, lightMultiplier);
                         allFaces.Add(iconFace);
-                        if (CalculateFaceNormal(vertices).z > FrontFaceCullThreshold)
+                        if (normal.z > FrontFaceCullThreshold)
                             visibleFaces.Add(iconFace);
                     }
                 }
@@ -1042,8 +1050,8 @@ namespace Constructed.Unity
                 {
                     SoftwareIconFace face = faces[faceIndex];
                     Vector3[] projected = ProjectFaceVertices(face.Vertices, projectedCenter, pixelsPerUnit);
-                    RasterizeSoftwareTriangle(projected[0], projected[1], projected[2], face.Uvs[0], face.Uvs[1], face.Uvs[2], face.Texture, pixels, depthBuffer);
-                    RasterizeSoftwareTriangle(projected[0], projected[2], projected[3], face.Uvs[0], face.Uvs[2], face.Uvs[3], face.Texture, pixels, depthBuffer);
+                    RasterizeSoftwareTriangle(projected[0], projected[1], projected[2], face.Uvs[0], face.Uvs[1], face.Uvs[2], face.Texture, face.LightMultiplier, pixels, depthBuffer);
+                    RasterizeSoftwareTriangle(projected[0], projected[2], projected[3], face.Uvs[0], face.Uvs[2], face.Uvs[3], face.Texture, face.LightMultiplier, pixels, depthBuffer);
                 }
 
                 Texture2D icon = new Texture2D(RenderResolution, RenderResolution, TextureFormat.RGBA32, false);
@@ -1110,6 +1118,7 @@ namespace Constructed.Unity
                 Vector2 uvB,
                 Vector2 uvC,
                 Texture2D texture,
+                float lightMultiplier,
                 Color32[] pixels,
                 float[] depthBuffer)
             {
@@ -1143,6 +1152,7 @@ namespace Constructed.Unity
                         Color32 sample = SampleTexturePoint(texture, uv);
                         if (sample.a <= AlphaClipThreshold)
                             continue;
+                        sample = ApplyMinecraftGuiLighting(sample, lightMultiplier);
 
                         if (depth <= currentDepth + DepthEqualThreshold && pixels[pixelIndex].a > 0)
                         {
@@ -1169,6 +1179,19 @@ namespace Constructed.Unity
                 int x = Mathf.Clamp(Mathf.FloorToInt(uv.x * texture.width), 0, texture.width - 1);
                 int y = Mathf.Clamp(Mathf.FloorToInt(uv.y * texture.height), 0, texture.height - 1);
                 return texture.GetPixel(x, y);
+            }
+
+            private static float CalculateMinecraftGuiLighting(Vector3 normal, bool usesBlockLight)
+            {
+                if (normal.sqrMagnitude <= 0.000001f)
+                    return 1f;
+
+                Vector3 shaderNormal = new Vector3(normal.x, -normal.y, normal.z).normalized;
+                Vector3 light0 = usesBlockLight ? MinecraftGui3DLight0 : MinecraftGuiFlatLight0;
+                Vector3 light1 = usesBlockLight ? MinecraftGui3DLight1 : MinecraftGuiFlatLight1;
+                float light0Contribution = Mathf.Max(0f, Vector3.Dot(light0, shaderNormal));
+                float light1Contribution = Mathf.Max(0f, Vector3.Dot(light1, shaderNormal));
+                return Mathf.Min(1f, ((light0Contribution + light1Contribution) * MinecraftLightPower) + MinecraftAmbientLight);
             }
 
             private Texture2D GetMissingTexture()
@@ -1353,6 +1376,23 @@ namespace Constructed.Unity
                 return (byte)((first * second) / 255);
             }
 
+            private static Color32 ApplyMinecraftGuiLighting(Color32 sample, float lightMultiplier)
+            {
+                if (lightMultiplier >= 0.9999f)
+                    return sample;
+
+                return new Color32(
+                    MultiplyColorByte(sample.r, lightMultiplier),
+                    MultiplyColorByte(sample.g, lightMultiplier),
+                    MultiplyColorByte(sample.b, lightMultiplier),
+                    sample.a);
+            }
+
+            private static byte MultiplyColorByte(byte value, float multiplier)
+            {
+                return (byte)Mathf.Clamp(Mathf.RoundToInt(value * multiplier), 0, 255);
+            }
+
             private static Color32 AlphaBlend(Color32 basePixel, Color32 overlayPixel)
             {
                 int overlayAlpha = overlayPixel.a;
@@ -1395,11 +1435,12 @@ namespace Constructed.Unity
 
             private readonly struct SoftwareIconFace
             {
-                public SoftwareIconFace(Vector3[] vertices, Vector2[] uvs, Texture2D texture)
+                public SoftwareIconFace(Vector3[] vertices, Vector2[] uvs, Texture2D texture, float lightMultiplier)
                 {
                     Vertices = vertices ?? throw new ArgumentNullException(nameof(vertices));
                     Uvs = uvs ?? throw new ArgumentNullException(nameof(uvs));
                     Texture = texture;
+                    LightMultiplier = lightMultiplier;
                 }
 
                 public Vector3[] Vertices { get; }
@@ -1407,6 +1448,8 @@ namespace Constructed.Unity
                 public Vector2[] Uvs { get; }
 
                 public Texture2D Texture { get; }
+
+                public float LightMultiplier { get; }
             }
         }
 

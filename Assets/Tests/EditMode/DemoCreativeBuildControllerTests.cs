@@ -2,6 +2,7 @@ using Constructed.Core;
 using Constructed.Create;
 using Constructed.Unity;
 using NUnit.Framework;
+using System.Reflection;
 using UnityEngine;
 
 namespace Constructed.Tests
@@ -83,6 +84,25 @@ namespace Constructed.Tests
             }
         }
 
+        [Test]
+        public void ModelBackedIconRendererUsesMinecraftGuiDiffuseLighting()
+        {
+            System.Type rendererType = typeof(DemoCreativeBuildController)
+                .GetNestedType("ModelBackedIconRenderer", BindingFlags.NonPublic);
+
+            Assert.NotNull(rendererType);
+            MethodInfo method = rendererType.GetMethod("CalculateMinecraftGuiLighting", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(method);
+
+            float brightTop = InvokeGuiLighting(method, Vector3.up, true);
+            float shadedFront = InvokeGuiLighting(method, Vector3.forward, true);
+            float shadedRight = InvokeGuiLighting(method, Vector3.right, true);
+
+            Assert.AreEqual(1f, brightTop, 0.0001f);
+            Assert.Less(shadedFront, 0.6f);
+            Assert.AreEqual(0.4f, shadedRight, 0.0001f);
+        }
+
         private static void DestroyIfFound(string name)
         {
             GameObject found = GameObject.Find(name);
@@ -101,6 +121,11 @@ namespace Constructed.Tests
             }
 
             return count;
+        }
+
+        private static float InvokeGuiLighting(MethodInfo method, Vector3 normal, bool usesBlockLight)
+        {
+            return (float)method.Invoke(null, new object[] { normal, usesBlockLight });
         }
     }
 }

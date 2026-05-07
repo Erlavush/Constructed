@@ -14,6 +14,7 @@ namespace Constructed.Tests
             MinecraftResolvedModel model = CreateLoader().LoadItemModel(ResourceLocation.Parse("create:andesite_alloy"));
 
             Assert.IsTrue(model.UsesGeneratedItemLayers);
+            Assert.IsFalse(model.UsesBlockLight);
             Assert.AreEqual(0, model.Elements.Count);
             CollectionAssert.AreEqual(
                 new[] { ResourceLocation.Parse("create:item/andesite_alloy") },
@@ -27,6 +28,7 @@ namespace Constructed.Tests
             MinecraftResolvedModel model = CreateLoader().LoadItemModel(ResourceLocation.Parse("create:shaft"));
 
             Assert.IsFalse(model.UsesGeneratedItemLayers);
+            Assert.IsTrue(model.UsesBlockLight);
             Assert.AreEqual(1, model.Elements.Count);
             AssertVector2Equals(new Vector2(16f, 16f), model.TextureSize);
             AssertResolvedTexture(model, "0", "create:block/axis");
@@ -85,6 +87,10 @@ namespace Constructed.Tests
             MinecraftResolvedModel model = CreateVanillaResourceLoader().LoadItemModel(ResourceLocation.Parse("minecraft:grass_block"));
 
             Assert.IsFalse(model.UsesGeneratedItemLayers);
+            Assert.IsTrue(model.UsesBlockLight);
+            Assert.IsTrue(model.HasGuiDisplay);
+            AssertVector3Equals(new Vector3(30f, 225f, 0f), model.GuiDisplay.Rotation);
+            AssertVector3Equals(new Vector3(0.625f, 0.625f, 0.625f), model.GuiDisplay.Scale);
             Assert.AreEqual(2, model.Elements.Count);
             AssertResolvedTexture(model, "top", "minecraft:block/grass_block_top");
             AssertResolvedTexture(model, "side", "minecraft:block/grass_block_side");
