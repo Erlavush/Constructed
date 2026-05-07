@@ -4,21 +4,41 @@
 Tool item used to define two shaft endpoints and create a mechanical belt chain between them.
 
 ## Player-Facing Behavior
-- First use on a valid shaft stores the first endpoint in the held item.
-- Second use on a compatible second shaft creates the belt chain between the two endpoints.
-- Sneak-use clears the stored first endpoint.
-- On successful belt creation, one connector item is consumed unless the player is in creative mode.
+- Acts as a two-click placement tool:
+- click a first shaft to lock endpoint A
+- click a second compatible shaft to attempt creation
+- Sneak-use clears endpoint A without placing.
+- While endpoint A is stored, client preview particles are emitted:
+- green when the current candidate can connect
+- red when current candidate cannot connect.
+- On success in Create:
+- the chain is converted to belt blocks with computed `part/slope/facing`
+- one connector item is consumed (unless player is in creative mode)
+- endpoint A data is cleared and a short item cooldown is applied.
 
 ## Placement And State
 - Acts as a `BlockItem` for `create:belt`.
-- Stores the first selected shaft position in the `BELT_FIRST_SHAFT` item data component.
-- The created belt segments receive `slope`, `part`, and `horizontal_facing` based on the endpoint geometry.
+- Stores first endpoint in `AllDataComponents.BELT_FIRST_SHAFT`.
+- Create clears invalid stored endpoints automatically when they no longer validate or exceed distance checks before second click handling.
+- On successful chain creation, each placed belt receives:
+- `facing` from endpoint geometry
+- `slope` from endpoint vertical relation (`horizontal|upward|downward|vertical`, potentially switched to `sideways` by vertical pulley logic)
+- `part` per segment (`start|middle|end|pulley`)
+- `casing=false`, `waterlogged` resolved through world water helper.
 
 ## World Interaction
-- Valid endpoints must be shafts, loaded, within the configured max belt length, and share a compatible shaft axis.
-- The path between endpoints must be replaceable, except for same-axis shafts already in the path.
-- If both endpoints are already rotating, their theoretical speed signs must not conflict.
-- Creation logic marks start, middle, end, and pulley belt segments while converting the path to belt blocks.
+- Endpoint validation rules (`validateAxis` + `canConnect`):
+- both endpoints must be loaded shafts
+- endpoint distance must be within `maxBeltLength` (default `20`)
+- shaft axes must match
+- the endpoint difference must pass Create’s geometry family rule (`sames == 1`) and keep the shaft-axis component at `0`
+- for `axis=Y`, diagonal X+Z offsets are explicitly rejected
+- if both endpoint theoretical speeds are non-zero, speed signs must match
+- intermediate positions may be aligned shafts on the same axis; other non-replaceable blocks reject connection.
+- Placement loop behavior:
+- creates chain with start/middle/end
+- upgrades middle aligned shafts to pulley parts
+- if a pulley is a vertical-axis shaft, slope mutates to `sideways` for subsequent placed segments in that loop.
 
 ## Data / Block Entity
 - Uses the held item's custom data to remember the first selected shaft position.
@@ -36,18 +56,30 @@ Tool item used to define two shaft endpoints and create a mechanical belt chain 
 - The same belt tutorial set also teaches valid belt orientations and item/entity transport behavior.
 
 ## Current Unity Status
-- Unity currently previews the item visually only.
-- Unity does not yet implement endpoint selection, path validation, or belt creation.
+- Unity now implements a first source-backed connector slice:
+- selectable/usable `create:belt_connector` in the build inventory
+- first-click shaft lock state in controller
+- sneak + click cancellation of stored first endpoint
+- second-click connection attempt with Create-shaped geometry/speed-sign validation
+- on success, world shafts/path are converted to belt block states
+- red/green world-space preview particles while selecting the second endpoint.
+- Deferred in Unity:
+- full item-stack data component persistence (`BELT_FIRST_SHAFT` equivalent at item-stack level)
+- full Create replaceability/destruction parity and sound/cooldown/advancement hooks
+- controller-based belt runtime transport behavior.
 
 ## Not Implemented Yet
-- Interactive two-click belt placement in Unity.
-- Validation against a future kinetic network.
-- Automatic conversion of the selected shaft path into controller-linked belt segments.
+- Full server/client parity for connector interactions (cooldowns, sounds, advancements, waterlogging details, replaceability edge cases).
+- Integration with future generalized kinetic network model beyond current focused resolver.
+- Full belt controller-chain and transport simulation after placement.
 
 ## Source Anchors
 - `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/content/kinetics/belt/item/BeltConnectorItem.java`
 - `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/content/kinetics/belt/item/BeltConnectorHandler.java`
+- `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/content/kinetics/belt/BeltBlock.java`
+- `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/content/kinetics/simpleRelays/ShaftBlock.java`
 - `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/AllItems.java`
+- `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/AllDataComponents.java`
 - `References/Create-mc1.21.1-dev/src/main/java/com/simibubi/create/infrastructure/config/CKinetics.java`
 - `References/Create-mc1.21.1-dev/src/generated/resources/assets/create/models/item/belt_connector.json`
 

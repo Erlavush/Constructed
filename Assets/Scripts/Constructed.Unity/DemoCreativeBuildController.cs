@@ -19,6 +19,13 @@ namespace Constructed.Unity
         private const string HudCrosshairPath = "hud/crosshair.png";
         private const string HudSlotPath = "container/slot.png";
         private const float InventoryPanelAlpha = 0.9f;
+        private const float BeltPreviewEmitIntervalSeconds = 0.06f;
+        private const float BeltPreviewPointSpacing = 0.25f;
+        private const float BeltPreviewPointJitter = 0.075f;
+        private const float BeltPreviewPointSize = 0.09f;
+        private const float BeltPreviewPointLifetime = 0.22f;
+        private static readonly Color BeltPreviewValidColor = new Color(0.3f, 0.9f, 0.5f, 1f);
+        private static readonly Color BeltPreviewInvalidColor = new Color(0.9f, 0.3f, 0.5f, 1f);
 
         [SerializeField]
         private float reachDistance = DefaultReachDistance;
@@ -35,6 +42,9 @@ namespace Constructed.Unity
         private DemoCreativeBuildController.ModelBackedIconRenderer iconRenderer;
         private bool inventoryOpen;
         private int selectedHotbarSlotIndex;
+        private BlockPos? beltFirstShaftPosition;
+        private ParticleSystem beltPreviewParticleSystem;
+        private float nextBeltPreviewEmitTime;
 
         public int SelectedHotbarSlotIndex
         {
@@ -87,6 +97,7 @@ namespace Constructed.Unity
         private void OnDisable()
         {
             inventoryOpen = false;
+            ClearBeltConnectorSelection();
             DemoMinecraftFirstPersonController playerController = GetComponentInParent<DemoMinecraftFirstPersonController>();
             if (playerController != null)
                 playerController.InputEnabled = true;
@@ -106,6 +117,15 @@ namespace Constructed.Unity
 
             DestroyTexture(solidTexture);
             solidTexture = null;
+
+            if (beltPreviewParticleSystem != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(beltPreviewParticleSystem.gameObject);
+                else
+                    DestroyImmediate(beltPreviewParticleSystem.gameObject);
+                beltPreviewParticleSystem = null;
+            }
         }
 
         private void Update()
@@ -192,12 +212,26 @@ namespace Constructed.Unity
             if (camera == null)
                 return;
 
-            if (!TryRaycastWorld(camera, out DemoWorldHit hit))
-                return;
-
             ResourceLocation? selectedBlockId = hotbarSlots[selectedHotbarSlotIndex];
+            bool beltConnectorSelected =
+                selectedBlockId.HasValue && selectedBlockId.Value == DemoContentCatalog.BeltConnectorItemId;
+            bool hasHit = TryRaycastWorld(camera, out DemoWorldHit hit);
+
+            if (beltConnectorSelected)
+            {
+                HandleBeltConnectorInteraction(hasHit, hit);
+            }
+            else if (beltFirstShaftPosition.HasValue)
+            {
+                StopBeltPreviewParticles();
+            }
+
             if (DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Left))
             {
+                if (beltConnectorSelected)
+                    return;
+                if (!hasHit)
+                    return;
                 if (!selectedBlockId.HasValue)
                     return;
 
@@ -208,8 +242,183 @@ namespace Constructed.Unity
 
             if (!DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Right))
                 return;
+            if (!hasHit)
+                return;
 
             presenter.TryRemoveBlock(hit.Position);
+        }
+
+        private void HandleBeltConnectorInteraction(bool hasHit, DemoWorldHit hit)
+        {
+            if (presenter == null)
+                return;
+
+            if (beltFirstShaftPosition.HasValue &&
+                !DemoBeltPlacementService.ValidateShaftEndpoint(presenter.World, presenter.Catalog, beltFirstShaftPosition.Value))
+            {
+                ClearBeltConnectorSelection();
+            }
+
+            if (IsSneakHeld() && DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Left))
+            {
+                ClearBeltConnectorSelection();
+                return;
+            }
+
+            if (beltFirstShaftPosition.HasValue)
+                EmitBeltConnectorPreview(hasHit, hit);
+
+            if (!DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Left))
+                return;
+            if (!hasHit)
+                return;
+
+            BlockWorld world = presenter.World;
+            DemoContentCatalog catalog = presenter.Catalog;
+
+            if (!beltFirstShaftPosition.HasValue)
+            {
+                if (!DemoBeltPlacementService.ValidateShaftEndpoint(world, catalog, hit.Position))
+                    return;
+
+                beltFirstShaftPosition = hit.Position;
+                nextBeltPreviewEmitTime = 0f;
+                EmitBeltPreviewPoint(ToCenterPosition(hit.Position), BeltPreviewValidColor);
+                return;
+            }
+
+            BlockPos firstShaft = beltFirstShaftPosition.Value;
+            BlockPos secondShaft = ResolveBeltConnectorSecondShaftCandidate(hit);
+            if (DemoBeltPlacementService.TryCreateConnection(world, catalog, firstShaft, secondShaft, out _))
+            {
+                presenter.Rebuild();
+                ClearBeltConnectorSelection();
+            }
+        }
+
+        private BlockPos ResolveBeltConnectorSecondShaftCandidate(DemoWorldHit hit)
+        {
+            if (presenter == null)
+                return hit.Position;
+
+            BlockState clickedState = presenter.World.GetBlockState(hit.Position);
+            if (clickedState.Definition.Id == presenter.Catalog.Shaft.Id)
+                return hit.Position;
+
+            return hit.Position.Relative(hit.Face);
+        }
+
+        private void EmitBeltConnectorPreview(bool hasHit, DemoWorldHit hit)
+        {
+            if (!beltFirstShaftPosition.HasValue)
+                return;
+            if (Time.unscaledTime < nextBeltPreviewEmitTime)
+                return;
+
+            nextBeltPreviewEmitTime = Time.unscaledTime + BeltPreviewEmitIntervalSeconds;
+            BlockPos firstShaft = beltFirstShaftPosition.Value;
+            if (!hasHit)
+            {
+                Vector3 origin = ToCenterPosition(firstShaft);
+                EmitBeltPreviewPoint(origin + UnityEngine.Random.insideUnitSphere * BeltPreviewPointJitter, BeltPreviewValidColor);
+                return;
+            }
+
+            BlockPos secondShaft = ResolveBeltConnectorSecondShaftCandidate(hit);
+            DemoBeltConnectionEvaluation evaluation = DemoBeltPlacementService.EvaluateConnection(
+                presenter.World,
+                presenter.Catalog,
+                firstShaft,
+                secondShaft);
+            Color previewColor = evaluation.CanConnect ? BeltPreviewValidColor : BeltPreviewInvalidColor;
+            EmitBeltPreviewLine(firstShaft, secondShaft, previewColor);
+        }
+
+        private void EmitBeltPreviewLine(BlockPos firstShaft, BlockPos secondShaft, Color color)
+        {
+            Vector3 start = ToCenterPosition(firstShaft);
+            Vector3 end = ToCenterPosition(secondShaft);
+            float distance = Vector3.Distance(start, end);
+            if (distance <= 0.001f)
+            {
+                EmitBeltPreviewPoint(start, color);
+                return;
+            }
+
+            int pointCount = Mathf.Clamp(Mathf.CeilToInt(distance / BeltPreviewPointSpacing) + 1, 2, 96);
+            for (int i = 0; i < pointCount; i++)
+            {
+                float t = pointCount == 1 ? 0f : i / (float)(pointCount - 1);
+                Vector3 point = Vector3.Lerp(start, end, t);
+                point += UnityEngine.Random.insideUnitSphere * BeltPreviewPointJitter;
+                EmitBeltPreviewPoint(point, color);
+            }
+        }
+
+        private void EmitBeltPreviewPoint(Vector3 position, Color color)
+        {
+            ParticleSystem particleSystem = GetOrCreateBeltPreviewParticleSystem();
+            if (particleSystem == null)
+                return;
+
+            ParticleSystem.EmitParams emitParams = new ParticleSystem.EmitParams
+            {
+                position = position,
+                startColor = color,
+                startLifetime = BeltPreviewPointLifetime,
+                startSize = BeltPreviewPointSize
+            };
+            particleSystem.Emit(emitParams, 1);
+        }
+
+        private ParticleSystem GetOrCreateBeltPreviewParticleSystem()
+        {
+            if (beltPreviewParticleSystem != null)
+                return beltPreviewParticleSystem;
+
+            GameObject particleObject = new GameObject("Belt Connector Preview Particles");
+            particleObject.transform.SetParent(transform, false);
+            beltPreviewParticleSystem = particleObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = beltPreviewParticleSystem.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 2048;
+
+            ParticleSystem.EmissionModule emission = beltPreviewParticleSystem.emission;
+            emission.enabled = false;
+            ParticleSystem.ShapeModule shape = beltPreviewParticleSystem.shape;
+            shape.enabled = false;
+
+            ParticleSystemRenderer renderer = beltPreviewParticleSystem.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            Shader shader = Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended");
+            if (shader != null)
+            {
+                Material material = new Material(shader);
+                material.name = "Demo Belt Preview Particles";
+                renderer.sharedMaterial = material;
+            }
+
+            return beltPreviewParticleSystem;
+        }
+
+        private void StopBeltPreviewParticles()
+        {
+            if (beltPreviewParticleSystem != null)
+                beltPreviewParticleSystem.Clear();
+        }
+
+        private void ClearBeltConnectorSelection()
+        {
+            beltFirstShaftPosition = null;
+            StopBeltPreviewParticles();
+        }
+
+        private static bool IsSneakHeld()
+        {
+            return DemoInputSystemAdapter.IsKeyPressed("leftShiftKey") ||
+                DemoInputSystemAdapter.IsKeyPressed("rightShiftKey");
         }
 
         private void DrawCrosshair(float scale)
@@ -375,7 +584,8 @@ namespace Constructed.Unity
             foreach (CreateItemVisualCatalogEntry entry in CreateFirstSliceItemVisualCatalog.Entries)
             {
                 bool placeable = entry.ItemId == DemoContentCatalog.CreativeMotorBlockId ||
-                    entry.ItemId == DemoContentCatalog.ShaftBlockId;
+                    entry.ItemId == DemoContentCatalog.ShaftBlockId ||
+                    entry.ItemId == DemoContentCatalog.BeltConnectorItemId;
                 BuildInventoryEntry inventoryEntry = new BuildInventoryEntry(
                     entry.ItemId,
                     entry.Label,
@@ -403,7 +613,9 @@ namespace Constructed.Unity
             if (!hotbarSlots[1].HasValue)
                 hotbarSlots[1] = DemoContentCatalog.ShaftBlockId;
             if (!hotbarSlots[2].HasValue)
-                hotbarSlots[2] = DemoContentCatalog.SurfaceBlockId;
+                hotbarSlots[2] = DemoContentCatalog.BeltConnectorItemId;
+            if (!hotbarSlots[3].HasValue)
+                hotbarSlots[3] = DemoContentCatalog.SurfaceBlockId;
         }
 
         private bool TryRaycastWorld(Camera camera, out DemoWorldHit hit)
@@ -637,6 +849,11 @@ namespace Constructed.Unity
                 Mathf.FloorToInt(worldPosition.x),
                 Mathf.FloorToInt(worldPosition.y),
                 Mathf.FloorToInt(worldPosition.z));
+        }
+
+        private static Vector3 ToCenterPosition(BlockPos position)
+        {
+            return new Vector3(position.X + 0.5f, position.Y + 0.5f, position.Z + 0.5f);
         }
 
         private static string GetProjectRoot()

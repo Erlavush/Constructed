@@ -9,6 +9,7 @@ namespace Constructed.Unity
     {
         private static readonly ResourceLocation ShaftId = ResourceLocation.Parse("create:shaft");
         private static readonly ResourceLocation CreativeMotorId = ResourceLocation.Parse("create:creative_motor");
+        private static readonly ResourceLocation BeltId = ResourceLocation.Parse("create:belt");
         private static readonly ResourceLocation CreativeCrateId = ResourceLocation.Parse("create:creative_crate");
         private static readonly ResourceLocation BrassFunnelId = ResourceLocation.Parse("create:brass_funnel");
         private static readonly ResourceLocation ItemVaultId = ResourceLocation.Parse("create:item_vault");
@@ -33,6 +34,19 @@ namespace Constructed.Unity
                 visualProperties = new[]
                 {
                     SerializeRequiredProperty(state, DemoContentCatalog.FacingProperty, DemoContentCatalog.FacingProperty.Name)
+                };
+                return true;
+            }
+
+            if (blockId == BeltId)
+            {
+                visualProperties = new[]
+                {
+                    SerializeRequiredProperty(state, DemoContentCatalog.BeltCasingProperty, DemoContentCatalog.BeltCasingProperty.Name),
+                    SerializeRequiredProperty(state, DemoContentCatalog.BeltFacingProperty, DemoContentCatalog.BeltFacingProperty.Name),
+                    SerializeRequiredProperty(state, DemoContentCatalog.BeltPartProperty, DemoContentCatalog.BeltPartProperty.Name),
+                    SerializeRequiredProperty(state, DemoContentCatalog.BeltSlopeProperty, DemoContentCatalog.BeltSlopeProperty.Name),
+                    SerializeRequiredProperty(state, DemoContentCatalog.BeltWaterloggedProperty, DemoContentCatalog.BeltWaterloggedProperty.Name)
                 };
                 return true;
             }

@@ -34,7 +34,11 @@ namespace Constructed.Tests
 
             Assert.AreEqual(Direction.East, catalog.CreativeMotor.DefaultState.Get(DemoContentCatalog.FacingProperty));
             Assert.AreEqual(Axis.X, catalog.Shaft.DefaultState.Get(DemoContentCatalog.AxisProperty));
-            Assert.AreEqual(Direction.East, catalog.Belt.DefaultState.Get(DemoContentCatalog.FacingProperty));
+            Assert.AreEqual(Direction.North, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltFacingProperty));
+            Assert.AreEqual(DemoBeltSlope.Horizontal, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltSlopeProperty));
+            Assert.AreEqual(DemoBeltPart.Start, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltPartProperty));
+            Assert.AreEqual(false, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltCasingProperty));
+            Assert.AreEqual(false, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltWaterloggedProperty));
             Assert.AreEqual(Direction.East, catalog.CreativeCrate.DefaultState.Get(DemoContentCatalog.FacingProperty));
             Assert.AreEqual(Direction.East, catalog.BrassFunnel.DefaultState.Get(DemoContentCatalog.FacingProperty));
             Assert.AreSame(catalog.ItemVaultBlockEntityType, catalog.ItemVault.BlockEntityType);

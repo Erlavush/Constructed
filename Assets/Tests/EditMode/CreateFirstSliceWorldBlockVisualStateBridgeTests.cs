@@ -62,6 +62,29 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void BridgeSerializesBeltVisualPropertiesFromRuntimeState()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockState state = catalog.Belt.DefaultState
+                .With(DemoContentCatalog.BeltFacingProperty, Direction.East)
+                .With(DemoContentCatalog.BeltSlopeProperty, DemoBeltSlope.Upward)
+                .With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.Pulley)
+                .With(DemoContentCatalog.BeltCasingProperty, true)
+                .With(DemoContentCatalog.BeltWaterloggedProperty, false);
+
+            AssertBridgeProperties(
+                state,
+                new[]
+                {
+                    new BlockStatePropertyValue("casing", "true"),
+                    new BlockStatePropertyValue("facing", "east"),
+                    new BlockStatePropertyValue("part", "pulley"),
+                    new BlockStatePropertyValue("slope", "upward"),
+                    new BlockStatePropertyValue("waterlogged", "false")
+                });
+        }
+
+        [Test]
         public void BridgeAliasesItemVaultHorizontalAxisToVisualAxis()
         {
             DemoContentCatalog catalog = DemoContentCatalog.Create();
@@ -84,7 +107,6 @@ namespace Constructed.Tests
             DemoContentCatalog catalog = DemoContentCatalog.Create();
 
             Assert.IsFalse(CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(catalog.Surface.DefaultState, out _));
-            Assert.IsFalse(CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(catalog.Belt.DefaultState, out _));
         }
 
         [Test]

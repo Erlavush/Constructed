@@ -10,6 +10,7 @@ namespace Constructed.Create
         public static readonly ResourceLocation CreativeMotorBlockId = ResourceLocation.Parse("create:creative_motor");
         public static readonly ResourceLocation ShaftBlockId = ResourceLocation.Parse("create:shaft");
         public static readonly ResourceLocation BeltBlockId = ResourceLocation.Parse("create:belt");
+        public static readonly ResourceLocation BeltConnectorItemId = ResourceLocation.Parse("create:belt_connector");
         public static readonly ResourceLocation CreativeCrateBlockId = ResourceLocation.Parse("create:creative_crate");
         public static readonly ResourceLocation BrassFunnelBlockId = ResourceLocation.Parse("create:brass_funnel");
         public static readonly ResourceLocation DemoTransferItemId = ResourceLocation.Parse("create:andesite_alloy");
@@ -21,6 +22,36 @@ namespace Constructed.Create
                 "facing",
                 new[] { Direction.Down, Direction.Up, Direction.North, Direction.South, Direction.West, Direction.East },
                 Direction.East);
+        public static readonly StateProperty<Direction> BeltFacingProperty =
+            new StateProperty<Direction>(
+                "facing",
+                new[] { Direction.North, Direction.South, Direction.West, Direction.East },
+                Direction.North);
+        public static readonly StateProperty<DemoBeltSlope> BeltSlopeProperty =
+            new StateProperty<DemoBeltSlope>(
+                "slope",
+                new[]
+                {
+                    DemoBeltSlope.Horizontal,
+                    DemoBeltSlope.Upward,
+                    DemoBeltSlope.Downward,
+                    DemoBeltSlope.Vertical,
+                    DemoBeltSlope.Sideways
+                },
+                DemoBeltSlope.Horizontal);
+        public static readonly StateProperty<DemoBeltPart> BeltPartProperty =
+            new StateProperty<DemoBeltPart>(
+                "part",
+                new[]
+                {
+                    DemoBeltPart.Start,
+                    DemoBeltPart.Middle,
+                    DemoBeltPart.End,
+                    DemoBeltPart.Pulley
+                },
+                DemoBeltPart.Start);
+        public static readonly StateProperty<bool> BeltCasingProperty = StateProperty<bool>.Bool("casing", false);
+        public static readonly StateProperty<bool> BeltWaterloggedProperty = StateProperty<bool>.Bool("waterlogged", false);
 
         private DemoContentCatalog(
             Registry<ItemDefinition> items,
@@ -86,7 +117,16 @@ namespace Constructed.Create
             BlockDefinition surface = new BlockDefinition(SurfaceBlockId);
             BlockDefinition creativeMotor = new BlockDefinition(CreativeMotorBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition shaft = new BlockDefinition(ShaftBlockId, new IStateProperty[] { AxisProperty });
-            BlockDefinition belt = new BlockDefinition(BeltBlockId, new IStateProperty[] { FacingProperty });
+            BlockDefinition belt = new BlockDefinition(
+                BeltBlockId,
+                new IStateProperty[]
+                {
+                    BeltFacingProperty,
+                    BeltSlopeProperty,
+                    BeltPartProperty,
+                    BeltCasingProperty,
+                    BeltWaterloggedProperty
+                });
             BlockDefinition creativeCrate = new BlockDefinition(CreativeCrateBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition brassFunnel = new BlockDefinition(BrassFunnelBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition itemVault = ItemVaultBlock.CreateDefinition(itemVaultBlockEntityType);
