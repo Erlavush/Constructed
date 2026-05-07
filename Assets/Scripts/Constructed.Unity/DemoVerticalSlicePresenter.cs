@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using Constructed.Core;
 using Constructed.Create;
@@ -30,13 +31,34 @@ namespace Constructed.Unity
         private const float ItemModelPreviewBaseScale = 1.6f;
         private const float BlockModelPreviewBaseScale = 1.15f;
         private const float WorldBlockModelBaseScale = 1.0f;
+        private const float BeltMagicScrollMultiplier = 1f / (31.5f * 16f);
+        private const float BeltTicksPerSecond = 20f;
+        private const float BeltScrollFactorDiagonal = 3f / 8f;
+        private const float BeltScrollFactorOtherwise = 0.5f;
+        private const float BeltScrollOffsetBottom = 0.5f;
+        private const float BeltScrollOffsetOtherwise = 0f;
 
         private static readonly MinecraftModelDisplayTransform DefaultItemModelDisplay =
             new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
         private static readonly Color32 DefaultMinecraftGrassTint = new Color32(124, 189, 107, 255);
         private static readonly ResourceLocation CreativeMotorHalfShaftModelId = ResourceLocation.Parse("create:block/shaft_half");
+        private static readonly ResourceLocation BeltTopTextureId = ResourceLocation.Parse("create:block/belt");
+        private static readonly ResourceLocation BeltBottomTextureId = ResourceLocation.Parse("create:block/belt_offset");
+        private static readonly ResourceLocation BeltDiagonalTextureId = ResourceLocation.Parse("create:block/belt_diagonal");
+        private static readonly ResourceLocation BeltTopScrollTextureId = ResourceLocation.Parse("create:block/belt_scroll");
+        private static readonly ResourceLocation BeltDiagonalScrollTextureId = ResourceLocation.Parse("create:block/belt_diagonal_scroll");
+        private static readonly ResourceLocation BeltStartModelId = ResourceLocation.Parse("create:block/belt/start");
+        private static readonly ResourceLocation BeltMiddleModelId = ResourceLocation.Parse("create:block/belt/middle");
+        private static readonly ResourceLocation BeltEndModelId = ResourceLocation.Parse("create:block/belt/end");
+        private static readonly ResourceLocation BeltStartBottomModelId = ResourceLocation.Parse("create:block/belt/start_bottom");
+        private static readonly ResourceLocation BeltMiddleBottomModelId = ResourceLocation.Parse("create:block/belt/middle_bottom");
+        private static readonly ResourceLocation BeltEndBottomModelId = ResourceLocation.Parse("create:block/belt/end_bottom");
+        private static readonly ResourceLocation BeltDiagonalStartModelId = ResourceLocation.Parse("create:block/belt/diagonal_start");
+        private static readonly ResourceLocation BeltDiagonalMiddleModelId = ResourceLocation.Parse("create:block/belt/diagonal_middle");
+        private static readonly ResourceLocation BeltDiagonalEndModelId = ResourceLocation.Parse("create:block/belt/diagonal_end");
 
         private readonly Dictionary<string, Material> materialsByKey = new Dictionary<string, Material>();
+        private readonly Dictionary<string, AnimatedBeltMaterialState> animatedBeltMaterialsByKey = new Dictionary<string, AnimatedBeltMaterialState>();
         private readonly Dictionary<string, Texture2D> createTexturesByPath = new Dictionary<string, Texture2D>();
         private readonly Dictionary<string, Texture2D> minecraftTexturesByKey = new Dictionary<string, Texture2D>();
         private readonly List<Mesh> runtimeModelMeshes = new List<Mesh>();
@@ -74,6 +96,8 @@ namespace Constructed.Unity
 
         public int GeneratedAnimatedShaftCount { get; private set; }
 
+        public int GeneratedAnimatedBeltSegmentCount { get; private set; }
+
         public DemoContentCatalog Catalog
         {
             get
@@ -99,7 +123,17 @@ namespace Constructed.Unity
 
         private void Update()
         {
-            UpdateRotatingVisuals();
+            float timeSeconds = GetAnimationTimeSeconds();
+            UpdateAnimatedBeltMaterials(timeSeconds);
+            UpdateRotatingVisuals(timeSeconds);
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying && (rotatingVisuals.Count > 0 || animatedBeltMaterialsByKey.Count > 0))
+            {
+                UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+                UnityEditor.SceneView.RepaintAll();
+            }
+#endif
         }
 
         public void Rebuild()
@@ -121,8 +155,10 @@ namespace Constructed.Unity
             CopiedCreateAssetFileCount = 0;
             GeneratedAnimatedMotorOutputCount = 0;
             GeneratedAnimatedShaftCount = 0;
+            GeneratedAnimatedBeltSegmentCount = 0;
 
             DemoKineticSnapshot kineticSnapshot = DemoKineticResolver.Resolve(runtimeWorld, runtimeCatalog);
+            DemoBeltRuntimeSnapshot beltSnapshot = DemoBeltRuntimeResolver.Resolve(runtimeWorld, runtimeCatalog, kineticSnapshot);
             CreatePrivateAssetSyncResult createAssetSync = SyncPrivateCreateAssets();
             if (createAssetSync != null)
             {
@@ -137,7 +173,17 @@ namespace Constructed.Unity
             Transform worldRoot = CreateChildRoot(root, "World");
 
             foreach (WorldBlockEntry entry in runtimeWorld.GetStoredBlocks())
-                CreateBlock(worldRoot, runtimeCatalog, entry, runtimeWorld, kineticSnapshot, modelLoader, blockStateLoader);
+            {
+                CreateBlock(
+                    worldRoot,
+                    runtimeCatalog,
+                    entry,
+                    runtimeWorld,
+                    kineticSnapshot,
+                    beltSnapshot,
+                    modelLoader,
+                    blockStateLoader);
+            }
 
             ConfigureCamera();
             ConfigureLight();
@@ -198,10 +244,11 @@ namespace Constructed.Unity
             WorldBlockEntry entry,
             BlockWorld world,
             DemoKineticSnapshot kineticSnapshot,
+            DemoBeltRuntimeSnapshot beltSnapshot,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
-            if (TryCreateStateDrivenWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader))
+            if (TryCreateStateDrivenWorldBlock(root, catalog, entry, kineticSnapshot, beltSnapshot, modelLoader, blockStateLoader))
             {
                 GeneratedStateDrivenWorldBlockCount++;
                 GeneratedBlockCount++;
@@ -217,6 +264,7 @@ namespace Constructed.Unity
             DemoContentCatalog catalog,
             WorldBlockEntry entry,
             DemoKineticSnapshot kineticSnapshot,
+            DemoBeltRuntimeSnapshot beltSnapshot,
             MinecraftModelLoader modelLoader,
             MinecraftBlockStateLoader blockStateLoader)
         {
@@ -224,6 +272,8 @@ namespace Constructed.Unity
                 return TryCreateCreativeMotorWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
             if (entry.State.Definition.Id == catalog.Shaft.Id)
                 return TryCreateShaftWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
+            if (entry.State.Definition.Id == catalog.Belt.Id)
+                return TryCreateBeltWorldBlock(root, catalog, entry, beltSnapshot, modelLoader, blockStateLoader);
 
             if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
                 return false;
@@ -392,6 +442,180 @@ namespace Constructed.Unity
             }
 
             AddMeshColliders(blockRoot);
+            return true;
+        }
+
+        private bool TryCreateBeltWorldBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            DemoBeltRuntimeSnapshot beltSnapshot,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
+                return false;
+
+            GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.transform.SetParent(root, false);
+            blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
+
+            bool cased = entry.State.Get(DemoContentCatalog.BeltCasingProperty);
+            bool created = cased
+                ? TryCreateCombinedBlockModel(
+                    blockRoot.transform,
+                    entry.State.Definition.Id,
+                    visualProperties,
+                    WorldBlockModelBaseScale,
+                    modelLoader,
+                    blockStateLoader)
+                : TryCreateUncasedBeltWorldBlock(
+                    blockRoot.transform,
+                    catalog,
+                    entry.State,
+                    entry.Position,
+                    beltSnapshot,
+                    modelLoader,
+                    blockStateLoader);
+
+            if (!created)
+            {
+                FailedStateDrivenWorldBlockCount++;
+                DestroyUnityObject(blockRoot);
+                return false;
+            }
+
+            if (!cased)
+                GeneratedAnimatedBeltSegmentCount++;
+
+            AddMeshColliders(blockRoot);
+            return true;
+        }
+
+        private bool TryCreateUncasedBeltWorldBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            BlockState beltState,
+            BlockPos position,
+            DemoBeltRuntimeSnapshot beltSnapshot,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (modelLoader == null)
+                return false;
+
+            DemoBeltSegmentRuntimeState runtimeState;
+            if (beltSnapshot == null || !beltSnapshot.TryGet(position, out runtimeState))
+            {
+                runtimeState = new DemoBeltSegmentRuntimeState(
+                    position,
+                    position,
+                    0,
+                    1,
+                    beltState.Get(DemoContentCatalog.BeltFacingProperty),
+                    beltState.Get(DemoContentCatalog.BeltSlopeProperty),
+                    beltState.Get(DemoContentCatalog.BeltPartProperty),
+                    DemoBeltRuntimeResolver.GetRotationAxis(beltState, catalog),
+                    0f);
+            }
+
+            Direction facing = runtimeState.Facing;
+            DemoBeltSlope slope = runtimeState.Slope;
+            DemoBeltPart part = runtimeState.Part;
+            bool diagonal = IsDiagonalSlope(slope);
+            float signedSpeed = GetBeltSignedSpeed(runtimeState.Speed, facing, slope);
+
+            Transform beltRoot = CreateChildRoot(root, "Belt");
+            SetBeltVisualTransform(beltRoot, facing, slope, WorldBlockModelBaseScale);
+
+            ResourceLocation topModelId = ResolveUncasedBeltTopModel(part, diagonal);
+            bool diagonalLayer = diagonal;
+            bool topUsesBottomOffset = diagonal;
+            if (!TryCreateAnimatedBeltLayer(beltRoot, topModelId, signedSpeed, diagonalLayer, topUsesBottomOffset, modelLoader))
+            {
+                DestroyUnityObject(beltRoot.gameObject);
+                return false;
+            }
+
+            if (!diagonal)
+            {
+                ResourceLocation bottomModelId = ResolveUncasedBeltBottomModel(part);
+                if (!TryCreateAnimatedBeltLayer(beltRoot, bottomModelId, signedSpeed, false, true, modelLoader))
+                {
+                    DestroyUnityObject(beltRoot.gameObject);
+                    return false;
+                }
+            }
+
+            if (part != DemoBeltPart.Middle)
+                TryCreateBeltPulleyShaft(root, position, runtimeState, modelLoader, blockStateLoader);
+
+            return true;
+        }
+
+        private bool TryCreateAnimatedBeltLayer(
+            Transform root,
+            ResourceLocation modelId,
+            float signedSpeed,
+            bool diagonal,
+            bool usesBottomOffset,
+            MinecraftModelLoader modelLoader)
+        {
+            MinecraftResolvedModel model = modelLoader.LoadModel(modelId);
+            if (model.Elements.Count == 0)
+                return false;
+
+            Transform layerRoot = CreateChildRoot(root, modelId.Path.Replace('/', '_'));
+            if (!TryCreateCombinedResolvedModel(
+                    layerRoot,
+                    model,
+                    textureId => GetAnimatedBeltMaterial(textureId, signedSpeed, diagonal, usesBottomOffset)))
+            {
+                DestroyUnityObject(layerRoot.gameObject);
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryCreateBeltPulleyShaft(
+            Transform root,
+            BlockPos position,
+            DemoBeltSegmentRuntimeState runtimeState,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (modelLoader == null || blockStateLoader == null)
+                return false;
+
+            BlockStatePropertyValue[] shaftVisualProperties =
+            {
+                new BlockStatePropertyValue("axis", DemoContentCatalog.AxisProperty.Serialize(runtimeState.RotationAxis))
+            };
+
+            Transform spinRoot = CreateChildRoot(root, "Pulley Shaft Spin");
+            if (!TryCreateCombinedBlockModel(
+                    spinRoot,
+                    DemoContentCatalog.ShaftBlockId,
+                    shaftVisualProperties,
+                    WorldBlockModelBaseScale,
+                    modelLoader,
+                    blockStateLoader))
+            {
+                DestroyUnityObject(spinRoot.gameObject);
+                return false;
+            }
+
+            if (runtimeState.Speed != 0f)
+            {
+                rotatingVisuals.Add(
+                    new RotatingVisualState(
+                        spinRoot,
+                        ToUnityAxisVector(runtimeState.RotationAxis),
+                        DemoKineticResolver.ConvertToDegreesPerSecond(runtimeState.Speed),
+                        DemoKineticResolver.GetRotationOffsetDegrees(position, runtimeState.RotationAxis)));
+            }
+
             return true;
         }
 
@@ -742,8 +966,18 @@ namespace Constructed.Unity
 
         private bool TryCreateCombinedResolvedModel(Transform root, MinecraftResolvedModel model)
         {
-            Dictionary<ResourceLocation, CombinedMeshBuilder> builders =
-                new Dictionary<ResourceLocation, CombinedMeshBuilder>();
+            return TryCreateCombinedResolvedModel(root, model, GetCreateTextureMaterial);
+        }
+
+        private bool TryCreateCombinedResolvedModel(
+            Transform root,
+            MinecraftResolvedModel model,
+            Func<ResourceLocation, Material> materialResolver)
+        {
+            if (materialResolver == null)
+                throw new ArgumentNullException(nameof(materialResolver));
+
+            Dictionary<ResourceLocation, CombinedMeshBuilder> builders = new Dictionary<ResourceLocation, CombinedMeshBuilder>();
             int faceCount = 0;
             foreach (MinecraftModelElement element in model.Elements)
             {
@@ -765,12 +999,16 @@ namespace Constructed.Unity
                 return false;
 
             foreach (KeyValuePair<ResourceLocation, CombinedMeshBuilder> pair in builders)
-                CreateCombinedMeshObject(root, pair.Key, pair.Value);
+                CreateCombinedMeshObject(root, pair.Key, pair.Value, materialResolver(pair.Key));
 
             return true;
         }
 
-        private void CreateCombinedMeshObject(Transform root, ResourceLocation textureId, CombinedMeshBuilder builder)
+        private void CreateCombinedMeshObject(
+            Transform root,
+            ResourceLocation textureId,
+            CombinedMeshBuilder builder,
+            Material material)
         {
             GameObject meshObject = new GameObject("Combined " + textureId.Path);
             meshObject.transform.SetParent(root, false);
@@ -786,7 +1024,7 @@ namespace Constructed.Unity
             mesh.RecalculateBounds();
             runtimeModelMeshes.Add(mesh);
             meshFilter.sharedMesh = mesh;
-            meshRenderer.sharedMaterial = GetCreateTextureMaterial(textureId);
+            meshRenderer.sharedMaterial = material ?? GetCreateTextureMaterial(textureId);
         }
 
         private void CreateFallbackBlockPreview(Transform root, CreateBlockVisualCatalogEntry entry)
@@ -965,10 +1203,10 @@ namespace Constructed.Unity
             {
                 uvs = new[]
                 {
-                    uvs[3],
-                    uvs[0],
                     uvs[1],
-                    uvs[2]
+                    uvs[2],
+                    uvs[3],
+                    uvs[0]
                 };
             }
 
@@ -981,6 +1219,102 @@ namespace Constructed.Unity
             {
                 0, 1, 2,
                 0, 2, 3
+            };
+        }
+
+        private static ResourceLocation ResolveUncasedBeltTopModel(DemoBeltPart part, bool diagonal)
+        {
+            bool start = part == DemoBeltPart.Start;
+            bool end = part == DemoBeltPart.End;
+
+            if (diagonal)
+            {
+                if (start)
+                    return BeltDiagonalStartModelId;
+                if (end)
+                    return BeltDiagonalEndModelId;
+                return BeltDiagonalMiddleModelId;
+            }
+
+            if (start)
+                return BeltStartModelId;
+            if (end)
+                return BeltEndModelId;
+            return BeltMiddleModelId;
+        }
+
+        private static ResourceLocation ResolveUncasedBeltBottomModel(DemoBeltPart part)
+        {
+            if (part == DemoBeltPart.Start)
+                return BeltStartBottomModelId;
+            if (part == DemoBeltPart.End)
+                return BeltEndBottomModelId;
+            return BeltMiddleBottomModelId;
+        }
+
+        private static bool IsDiagonalSlope(DemoBeltSlope slope)
+        {
+            return slope == DemoBeltSlope.Upward || slope == DemoBeltSlope.Downward;
+        }
+
+        private static float GetBeltSignedSpeed(float speed, Direction facing, DemoBeltSlope slope)
+        {
+            bool diagonal = IsDiagonalSlope(slope);
+            bool sideways = slope == DemoBeltSlope.Sideways;
+            bool vertical = slope == DemoBeltSlope.Vertical;
+            bool upward = slope == DemoBeltSlope.Upward;
+            bool downward = slope == DemoBeltSlope.Downward;
+            bool alongX = facing.Axis() == Axis.X;
+            bool alongZ = facing.Axis() == Axis.Z;
+
+            bool shouldFlipPrimary =
+                (facing.AxisDirection() == AxisDirection.Negative) ^ upward ^ ((alongX && !diagonal) || (alongZ && diagonal));
+            if (shouldFlipPrimary)
+                speed = -speed;
+
+            bool shouldFlipSecondary = (sideways && (facing == Direction.South || facing == Direction.West)) ||
+                (vertical && facing == Direction.East);
+            if (shouldFlipSecondary)
+                speed = -speed;
+
+            return speed;
+        }
+
+        private static void SetBeltVisualTransform(Transform transform, Direction facing, DemoBeltSlope slope, float baseScale)
+        {
+            bool diagonal = IsDiagonalSlope(slope);
+            bool sideways = slope == DemoBeltSlope.Sideways;
+            bool vertical = slope == DemoBeltSlope.Vertical;
+            bool downward = slope == DemoBeltSlope.Downward;
+            bool alongX = facing.Axis() == Axis.X;
+            bool alongZ = facing.Axis() == Axis.Z;
+
+            float rotX =
+                (!diagonal && slope != DemoBeltSlope.Horizontal ? 90f : 0f) +
+                (downward ? 180f : 0f) +
+                (sideways ? 90f : 0f) +
+                (vertical && alongZ ? 180f : 0f);
+            float rotY =
+                ToYRot(facing) +
+                (((diagonal ^ alongX) && !downward) ? 180f : 0f) +
+                (sideways && alongZ ? 180f : 0f) +
+                (vertical && alongX ? 90f : 0f);
+            float rotZ = (sideways ? 90f : 0f) + (vertical && alongX ? 90f : 0f);
+
+            transform.localPosition = Vector3.zero;
+            transform.localRotation = Quaternion.Euler(rotX, rotY, rotZ);
+            transform.localScale = Vector3.one * baseScale;
+        }
+
+        private static float ToYRot(Direction direction)
+        {
+            return direction switch
+            {
+                Direction.South => 0f,
+                Direction.West => 90f,
+                Direction.North => 180f,
+                Direction.East => 270f,
+                _ => 0f
             };
         }
 
@@ -1105,6 +1439,56 @@ namespace Constructed.Unity
             return material;
         }
 
+        private Material GetAnimatedBeltMaterial(ResourceLocation sourceTextureId, float signedSpeed, bool diagonal, bool usesBottomOffset)
+        {
+            if (!TryResolveBeltScrollTexture(sourceTextureId, out ResourceLocation scrollTextureId))
+                return GetCreateTextureMaterial(sourceTextureId);
+
+            float scrollFactor = diagonal ? BeltScrollFactorDiagonal : BeltScrollFactorOtherwise;
+            float cycleOffset = usesBottomOffset ? BeltScrollOffsetBottom : BeltScrollOffsetOtherwise;
+            string key = "belt_scroll_" +
+                sourceTextureId +
+                "_target_" +
+                scrollTextureId +
+                "_speed_" +
+                signedSpeed.ToString("0.###", CultureInfo.InvariantCulture) +
+                "_factor_" +
+                scrollFactor.ToString("0.###", CultureInfo.InvariantCulture) +
+                "_offset_" +
+                cycleOffset.ToString("0.###", CultureInfo.InvariantCulture);
+
+            Material material;
+            if (materialsByKey.TryGetValue(key, out material))
+                return material;
+
+            material = new Material(FindLitShader());
+            material.name = "Demo " + key;
+            ConfigureCreateScrollingMaterial(material, LoadPrivateCreateTexture(scrollTextureId));
+            SetMaterialTextureTransform(material, new Vector2(1f, 0.5f), Vector2.zero);
+
+            materialsByKey.Add(key, material);
+            animatedBeltMaterialsByKey[key] = new AnimatedBeltMaterialState(material, signedSpeed, scrollFactor, cycleOffset);
+            return material;
+        }
+
+        private static bool TryResolveBeltScrollTexture(ResourceLocation sourceTextureId, out ResourceLocation scrollTextureId)
+        {
+            if (sourceTextureId == BeltTopTextureId || sourceTextureId == BeltBottomTextureId)
+            {
+                scrollTextureId = BeltTopScrollTextureId;
+                return true;
+            }
+
+            if (sourceTextureId == BeltDiagonalTextureId)
+            {
+                scrollTextureId = BeltDiagonalScrollTextureId;
+                return true;
+            }
+
+            scrollTextureId = default;
+            return false;
+        }
+
         private static void ConfigureCreateModelMaterial(Material material, Texture2D texture)
         {
             if (material == null)
@@ -1142,6 +1526,66 @@ namespace Constructed.Unity
             material.DisableKeyword("_ALPHABLEND_ON");
             material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             material.renderQueue = 2450;
+        }
+
+        private static void ConfigureCreateScrollingMaterial(Material material, Texture2D texture)
+        {
+            if (material == null)
+                throw new ArgumentNullException(nameof(material));
+
+            material.color = Color.white;
+
+            if (texture != null)
+            {
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Repeat;
+                texture.anisoLevel = 0;
+
+                material.mainTexture = texture;
+                if (material.HasProperty("_BaseMap"))
+                    material.SetTexture("_BaseMap", texture);
+                if (material.HasProperty("_MainTex"))
+                    material.SetTexture("_MainTex", texture);
+            }
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", Color.white);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", Color.white);
+            if (material.HasProperty("_Surface"))
+                material.SetFloat("_Surface", 0f);
+            if (material.HasProperty("_AlphaClip"))
+                material.SetFloat("_AlphaClip", 1f);
+            if (material.HasProperty("_Cutoff"))
+                material.SetFloat("_Cutoff", 0.1f);
+            if (material.HasProperty("_ZWrite"))
+                material.SetFloat("_ZWrite", 1f);
+
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.renderQueue = 2450;
+        }
+
+        private static void SetMaterialTextureTransform(Material material, Vector2 scale, Vector2 offset)
+        {
+            if (material == null)
+                return;
+
+            material.mainTextureScale = scale;
+            material.mainTextureOffset = offset;
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                material.SetTextureScale("_BaseMap", scale);
+                material.SetTextureOffset("_BaseMap", offset);
+            }
+
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTextureScale("_MainTex", scale);
+                material.SetTextureOffset("_MainTex", offset);
+            }
         }
 
         private static void ConfigureLoadedTexture(Texture2D texture, TextureWrapMode wrapMode)
@@ -1612,14 +2056,33 @@ namespace Constructed.Unity
             return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         }
 
-        private void UpdateRotatingVisuals()
+        private void UpdateAnimatedBeltMaterials(float timeSeconds)
+        {
+            if (animatedBeltMaterialsByKey.Count == 0)
+                return;
+
+            foreach (AnimatedBeltMaterialState state in animatedBeltMaterialsByKey.Values)
+            {
+                if (state.Material == null)
+                    continue;
+
+                float cycle = Mathf.Repeat((timeSeconds * BeltTicksPerSecond * state.Speed * BeltMagicScrollMultiplier) + state.CycleOffset, 1f);
+                float offset = cycle * state.ScrollFactor;
+                SetMaterialTextureTransform(state.Material, new Vector2(1f, 0.5f), new Vector2(0f, -offset));
+            }
+        }
+
+        private static float GetAnimationTimeSeconds()
+        {
+            return Application.isPlaying
+                ? Time.realtimeSinceStartup
+                : (float)(DateTime.UtcNow.Ticks / (double)TimeSpan.TicksPerSecond);
+        }
+
+        private void UpdateRotatingVisuals(float timeSeconds)
         {
             if (rotatingVisuals.Count == 0)
                 return;
-
-            float timeSeconds = Application.isPlaying
-                ? Time.realtimeSinceStartup
-                : (float)(DateTime.UtcNow.Ticks / (double)TimeSpan.TicksPerSecond);
 
             foreach (RotatingVisualState rotatingVisual in rotatingVisuals)
             {
@@ -1632,13 +2095,6 @@ namespace Constructed.Unity
                 rotatingVisual.Transform.localRotation = Quaternion.AngleAxis(angle, rotatingVisual.Axis);
             }
 
-#if UNITY_EDITOR
-            if (!Application.isPlaying)
-            {
-                UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
-                UnityEditor.SceneView.RepaintAll();
-            }
-#endif
         }
 
         private static void AddMeshColliders(GameObject root)
@@ -1892,6 +2348,7 @@ namespace Constructed.Unity
         private void DestroyRuntimeAssets()
         {
             rotatingVisuals.Clear();
+            animatedBeltMaterialsByKey.Clear();
 
             foreach (Material material in materialsByKey.Values)
                 DestroyUnityObject(material);
@@ -1963,6 +2420,25 @@ namespace Constructed.Unity
                 triangles.Add(baseIndex + 2);
                 triangles.Add(baseIndex + 3);
             }
+        }
+
+        private sealed class AnimatedBeltMaterialState
+        {
+            public AnimatedBeltMaterialState(Material material, float speed, float scrollFactor, float cycleOffset)
+            {
+                Material = material;
+                Speed = speed;
+                ScrollFactor = scrollFactor;
+                CycleOffset = cycleOffset;
+            }
+
+            public Material Material { get; }
+
+            public float Speed { get; }
+
+            public float ScrollFactor { get; }
+
+            public float CycleOffset { get; }
         }
 
         private sealed class RotatingVisualState

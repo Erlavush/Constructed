@@ -1,5 +1,6 @@
 using Constructed.Unity;
 using Constructed.Create;
+using Constructed.Core;
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Reflection;
@@ -29,6 +30,7 @@ namespace Constructed.Tests
                 Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
                 Assert.AreEqual(1, presenter.GeneratedAnimatedMotorOutputCount);
                 Assert.AreEqual(2, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedBeltSegmentCount);
                 Assert.AreEqual(CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count, presenter.SyncedCreateAssetFileCount + presenter.MissingCreateAssetFileCount);
                 Assert.AreEqual(1, presenterObject.transform.childCount);
                 Assert.AreEqual("Generated Demo Layout", presenterObject.transform.GetChild(0).name);
@@ -270,6 +272,64 @@ namespace Constructed.Tests
             }
         }
 
+        [Test]
+        public void PresenterBuildsAnimatedUncasedBeltsAndKeepsEndpointPulleyShaftVisuals()
+        {
+            GameObject presenterObject = new GameObject("Presenter Belt Render Test");
+            try
+            {
+                DemoVerticalSlicePresenter presenter = presenterObject.AddComponent<DemoVerticalSlicePresenter>();
+                presenter.Rebuild();
+
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.CreativeMotorPosition));
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.FirstShaftPosition));
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.SecondShaftPosition));
+
+                DemoContentCatalog catalog = presenter.Catalog;
+                BlockPos first = new BlockPos(2, DemoVerticalSliceBootstrap.MachineY, 2);
+                BlockPos second = new BlockPos(2, DemoVerticalSliceBootstrap.MachineY, 4);
+                BlockPos motor = first.Relative(Direction.West);
+                presenter.World.SetBlockState(first, catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+                presenter.World.SetBlockState(second, catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+                presenter.World.SetBlockState(motor, catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+
+                Assert.IsTrue(DemoBeltPlacementService.TryCreateConnection(presenter.World, catalog, first, second, out _));
+                presenter.Rebuild();
+
+                Assert.AreEqual(68, presenter.GeneratedBlockCount);
+                Assert.AreEqual(4, presenter.GeneratedStateDrivenWorldBlockCount);
+                Assert.AreEqual(3, presenter.GeneratedAnimatedBeltSegmentCount);
+                Assert.AreEqual(1, presenter.GeneratedAnimatedMotorOutputCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
+
+                MeshRenderer[] renderers = presenterObject.GetComponentsInChildren<MeshRenderer>(true);
+                int animatedBeltMaterialCount = 0;
+                foreach (MeshRenderer renderer in renderers)
+                {
+                    Material material = renderer.sharedMaterial;
+                    if (material == null || material.name == null)
+                        continue;
+                    if (!material.name.StartsWith("Demo belt_scroll_"))
+                        continue;
+
+                    animatedBeltMaterialCount++;
+                    Assert.NotNull(material.mainTexture);
+                    Assert.AreEqual(FilterMode.Point, material.mainTexture.filterMode);
+                }
+
+                Assert.GreaterOrEqual(animatedBeltMaterialCount, 2);
+                Assert.AreEqual(2, CountTransformsByName(presenterObject, "Pulley Shaft Spin"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(presenterObject);
+                DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
+                DestroyIfFound("Directional Light");
+            }
+        }
+
         private static void AssertSurfaceTexture(Texture2D texture)
         {
             Assert.NotNull(texture);
@@ -312,6 +372,19 @@ namespace Constructed.Tests
         {
             object result = method.Invoke(null, new object[] { catalog, stateAbove });
             Assert.AreEqual(expected, (bool)result, stateAbove.Definition.Id.ToString());
+        }
+
+        private static int CountTransformsByName(GameObject root, string name)
+        {
+            int count = 0;
+            Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
+            foreach (Transform transform in transforms)
+            {
+                if (transform != null && transform.name == name)
+                    count++;
+            }
+
+            return count;
         }
     }
 }

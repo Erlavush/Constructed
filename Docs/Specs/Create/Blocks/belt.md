@@ -70,16 +70,20 @@ Multi-block kinetic transport line for items and entities.
 - path validation mirrors Create geometry + speed-sign checks at current slice scope
 - red/green preview particles are emitted while selecting the second endpoint
 - state-driven world bridge now emits belt visual properties for blockstate model resolution.
+- Unity now renders uncased belts through Create-shaped partial models (`start/middle/end`, bottom layers, and diagonal variants) instead of the empty `particle` blockstate model.
+- Uncased belt materials now use Create-style scroll textures (`belt_scroll`, `belt_diagonal_scroll`) with the same runtime constants and sign logic (`MAGIC_SCROLL_MULTIPLIER`, diagonal/horizontal factors, bottom-phase offset).
+- Belt segments now resolve into a controller-chain runtime snapshot (`controller`, `index`, `length`, `rotationAxis`, `speed`) for rendering/runtime consumers.
+- Endpoint and pulley segments now keep visible shaft-like pulley visuals in Unity so belt endpoints do not appear to delete rotational anchor geometry in the scene.
 - Still deferred in Unity:
-- full controller-chain block entity behavior (`BeltBlockEntity`/`BeltInventory` equivalent)
-- animated UV scroll belt rendering parity and dyed scroll routing
+- full block-entity parity (`BeltBlockEntity`/`BeltInventory`) and authoritative moving-item transport
+- dyed belt sprite-shift routing (`DYED_BELTS`, `DYED_OFFSET_BELTS`, `DYED_DIAGONAL_BELTS`)
 - belt item/entity transport logic and handler integrations
 - cased/uncased interaction toggles and water behavior.
 
 ## Not Implemented Yet
 - Belt controller network with shared transport inventory and authoritative index math.
 - Full Create parity for replaceability/destruction semantics during connection.
-- Full belt renderer behavior (`BeltRenderer`/`BeltVisual`) including scroll animation material shifting and all dyed belt sprite shifts.
+- Full belt renderer parity for pulley model/details and dyed sprite-shift variants.
 - Full processing/logistics interactions on moving stacks.
 
 ## Source Anchors
