@@ -117,6 +117,8 @@ namespace Constructed.Create
             BlockDefinition surface = new BlockDefinition(SurfaceBlockId);
             BlockDefinition creativeMotor = new BlockDefinition(CreativeMotorBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition shaft = new BlockDefinition(ShaftBlockId, new IStateProperty[] { AxisProperty });
+
+            BeltBlockLifecycle beltLifecycle = new BeltBlockLifecycle();
             BlockDefinition belt = new BlockDefinition(
                 BeltBlockId,
                 new IStateProperty[]
@@ -126,7 +128,8 @@ namespace Constructed.Create
                     BeltPartProperty,
                     BeltCasingProperty,
                     BeltWaterloggedProperty
-                });
+                },
+                beltLifecycle);
             BlockDefinition creativeCrate = new BlockDefinition(CreativeCrateBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition brassFunnel = new BlockDefinition(BrassFunnelBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition itemVault = ItemVaultBlock.CreateDefinition(itemVaultBlockEntityType);
@@ -142,7 +145,7 @@ namespace Constructed.Create
             blocks.Register(itemVault.Id, itemVault);
             blocks.Freeze();
 
-            return new DemoContentCatalog(
+            DemoContentCatalog catalog = new DemoContentCatalog(
                 items,
                 blocks,
                 itemVaultBlockEntityType,
@@ -155,6 +158,10 @@ namespace Constructed.Create
                 creativeCrate,
                 brassFunnel,
                 itemVault);
+
+            beltLifecycle.Initialize(catalog);
+
+            return catalog;
         }
     }
 }
