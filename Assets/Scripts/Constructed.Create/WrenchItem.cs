@@ -11,7 +11,7 @@ namespace Constructed.Create
         {
         }
 
-        public void Rotate(World world, BlockPos pos, BlockState state, Direction clickedFace)
+        public void Rotate(Constructed.Minecraft.BlockWorld world, BlockPos pos, BlockState state, Direction clickedFace)
         {
             if (state.Definition is IWrenchable wrenchable)
             {
@@ -34,7 +34,7 @@ namespace Constructed.Create
             }
         }
 
-        public bool Dismantle(World world, BlockPos pos, BlockState state, Direction clickedFace)
+        public bool Dismantle(Constructed.Minecraft.BlockWorld world, BlockPos pos, BlockState state, Direction clickedFace)
         {
             if (state.Definition is IWrenchable wrenchable)
             {

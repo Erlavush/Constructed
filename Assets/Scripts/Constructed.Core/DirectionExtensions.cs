@@ -114,11 +114,11 @@ namespace Constructed.Core
         {
             switch (axis)
             {
-                case Axis.X:
+                case global::Constructed.Core.Axis.X:
                     return direction != Direction.West && direction != Direction.East ? direction.ClockWiseX() : direction;
-                case Axis.Y:
+                case global::Constructed.Core.Axis.Y:
                     return direction != Direction.Up && direction != Direction.Down ? direction.ClockWise() : direction;
-                case Axis.Z:
+                case global::Constructed.Core.Axis.Z:
                     return direction != Direction.North && direction != Direction.South ? direction.ClockWiseZ() : direction;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(axis), axis, null);
@@ -129,11 +129,11 @@ namespace Constructed.Core
         {
             switch (axis)
             {
-                case Axis.X:
+                case global::Constructed.Core.Axis.X:
                     return direction != Direction.West && direction != Direction.East ? direction.CounterClockWiseX() : direction;
-                case Axis.Y:
+                case global::Constructed.Core.Axis.Y:
                     return direction != Direction.Up && direction != Direction.Down ? direction.CounterClockWise() : direction;
-                case Axis.Z:
+                case global::Constructed.Core.Axis.Z:
                     return direction != Direction.North && direction != Direction.South ? direction.CounterClockWiseZ() : direction;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(axis), axis, null);

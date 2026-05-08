@@ -122,6 +122,8 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 
 - 2026-05-08: Completed the full Wrench Tool implementation across four phases. This includes the `create:wrench` item registration, the `IWrenchable` interface for block-specific interaction, and global rotation math in `WrenchableHelper`. Standard kinetic blocks (Shaft, Creative Motor, Belt, Item Vault) now support right-click rotation and sneak-right-click dismantling with 1:1 parity to Create mod's axis/facing cycles. The visual pipeline was upgraded to support animated software-rasterized icons for the wrench's spinning gear and private asset synchronization for the `item/wrench/gear` model. Sound placeholders (`create:wrench_rotate`, `create:wrench_remove`) were integrated into the interaction logic. Verification: successfully implemented the spinning gear icon in `DemoCreativeBuildController` and added `ItemVault` wrench support; compilation confirmed via open-editor `Editor.log` fallback.
 
+- 2026-05-08: Resolved several compiler errors and stale references after the Wrench implementation. Fixed `DirectionExtensions.cs` name collision by using `global::` for `Axis` type. Corrected `WrenchItem.cs` to use `BlockWorld` with full namespace. Fixed `CreatePrivateAssetSyncTool.cs` stale manifest reference (`CreateFirstSlicePrivateAssetManifest.Manifest`). Verified project stability via open-editor `Editor.log` fallback (successful assembly reload).
+
 ## Next Step
 
 Implement the first transported-item movement slice using the new belt runtime snapshot, then wire belt/funnel/tunnel interaction entry points incrementally.
