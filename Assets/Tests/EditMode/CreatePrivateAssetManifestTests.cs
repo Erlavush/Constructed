@@ -91,8 +91,8 @@ namespace Constructed.Tests
         public void SyncCopiesExistingFilesAndReportsMissingFiles()
         {
             string tempRoot = Path.Combine(Path.GetTempPath(), "ConstructedSync", Guid.NewGuid().ToString("N"));
-            string referenceRoot = Path.Combine(tempRoot, "Reference");
-            string privateRoot = Path.Combine(tempRoot, "Private", "Create");
+            string referenceRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(tempRoot);
+            string privateRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(tempRoot);
             string existingPath = "src/main/resources/assets/create/textures/item/example.png";
             string missingPath = "src/generated/resources/assets/create/models/item/missing.json";
 
@@ -115,7 +115,7 @@ namespace Constructed.Tests
                         })
                 });
 
-                CreatePrivateAssetSyncResult firstSync = CreatePrivateAssetSyncService.Sync(manifest, referenceRoot, privateRoot);
+                CreatePrivateAssetSyncResult firstSync = CreatePrivateAssetSyncService.Sync(manifest, tempRoot);
                 string privateAbsolutePath = Path.Combine(privateRoot, existingPath.Replace('/', Path.DirectorySeparatorChar));
 
                 Assert.AreEqual(2, firstSync.RequestedFileCount);
@@ -127,7 +127,7 @@ namespace Constructed.Tests
                 Assert.AreEqual(existingPath, firstSync.CopiedPaths[0]);
                 Assert.AreEqual(missingPath, firstSync.MissingPaths[0]);
 
-                CreatePrivateAssetSyncResult secondSync = CreatePrivateAssetSyncService.Sync(manifest, referenceRoot, privateRoot);
+                CreatePrivateAssetSyncResult secondSync = CreatePrivateAssetSyncService.Sync(manifest, tempRoot);
 
                 Assert.AreEqual(0, secondSync.CopiedPaths.Count);
                 Assert.AreEqual(1, secondSync.UnchangedPaths.Count);
