@@ -227,6 +227,7 @@ namespace Constructed.Unity
         private Transform CreateGeneratedRoot()
         {
             GameObject root = new GameObject(GeneratedRootName);
+            root.hideFlags = HideFlags.DontSave;
             root.transform.SetParent(transform, false);
             return root.transform;
         }
@@ -234,6 +235,7 @@ namespace Constructed.Unity
         private static Transform CreateChildRoot(Transform parent, string name)
         {
             GameObject root = new GameObject(name);
+            root.hideFlags = HideFlags.DontSave;
             root.transform.SetParent(parent, false);
             return root.transform;
         }
@@ -279,6 +281,7 @@ namespace Constructed.Unity
                 return false;
 
             GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.hideFlags = HideFlags.DontSave;
             blockRoot.transform.SetParent(root, false);
             blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
 
@@ -409,6 +412,7 @@ namespace Constructed.Unity
                 return false;
 
             GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.hideFlags = HideFlags.DontSave;
             blockRoot.transform.SetParent(root, false);
             blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
 
@@ -457,6 +461,7 @@ namespace Constructed.Unity
                 return false;
 
             GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.hideFlags = HideFlags.DontSave;
             blockRoot.transform.SetParent(root, false);
             blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
 
@@ -895,6 +900,7 @@ namespace Constructed.Unity
                 return false;
 
             GameObject motorRoot = new GameObject(name);
+            motorRoot.hideFlags = HideFlags.DontSave;
             motorRoot.transform.SetParent(root, false);
             motorRoot.transform.localPosition = localPosition;
 
@@ -1056,6 +1062,7 @@ namespace Constructed.Unity
             Material material)
         {
             GameObject meshObject = new GameObject("Combined " + textureId.Path);
+            meshObject.hideFlags = HideFlags.DontSave;
             meshObject.transform.SetParent(root, false);
 
             MeshFilter meshFilter = meshObject.AddComponent<MeshFilter>();
@@ -1107,6 +1114,7 @@ namespace Constructed.Unity
             int faceIndex)
         {
             GameObject faceObject = new GameObject(GetModelFaceName(element, face, faceIndex));
+            faceObject.hideFlags = HideFlags.DontSave;
             faceObject.transform.SetParent(root, false);
 
             MeshFilter meshFilter = faceObject.AddComponent<MeshFilter>();
@@ -1959,6 +1967,7 @@ namespace Constructed.Unity
         private static void AddFloatingLabel(Transform parent, string label, Vector3 localPosition, float scale)
         {
             GameObject labelObject = new GameObject("Label");
+            labelObject.hideFlags = HideFlags.DontSave;
             labelObject.transform.SetParent(parent, false);
             labelObject.transform.localPosition = localPosition;
             labelObject.transform.localRotation = Quaternion.Euler(60f, 0f, 0f);
