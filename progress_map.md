@@ -118,7 +118,7 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 - 2026-05-06: Updated `AGENTS.md` for faster low-overhead verification/checkpointing: no Unity tests for docs-only work, no full XML/log reads after a clean test exit, no duplicate progress-map-only commits, and no docs-only checkpoint unless requested.
 - 2026-05-04: Cleaned `AGENTS.md` shell and Unity command guidance, including the local Git `sh.exe` fallback and removing `-quit` from Unity `-runTests`.
 
-- 2026-05-08: Implemented Conveyor Belt Pulleys. Added `PULLEY` state to `MIDDLE` belt segments, enabling shaft insertion via right-click interaction. Updated kinetic connection rules and the renderer to use the official `create:block/belt_pulley` partial model. Verified that breaking pulleys drops shafts and that pulleys correctly propagate rotation power.
+- 2026-05-08: Implemented Conveyor Belt Pulleys. Added `PULLEY` state to `MIDDLE` belt segments, enabling shaft insertion via right-click interaction. Updated kinetic connection rules and the renderer to use the official `create:block/belt_pulley` partial model. Verified that breaking pulleys drops shafts and that pulleys correctly propagate rotation power. **Fixed "purplish" texture issue by adding `minecraft` namespace support to the asset pipeline and refined rotation parity using a nested `Orientation` root for partial models.**
 
 ## Next Step
 

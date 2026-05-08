@@ -30,8 +30,9 @@ namespace Constructed.Unity
                 normalizedPath.EndsWith("/..", StringComparison.Ordinal))
                 throw new ArgumentException("Repository-relative asset path cannot escape the Create reference root.", nameof(repositoryRelativePath));
             if (!normalizedPath.StartsWith(MainResourcesPrefix, StringComparison.Ordinal) &&
-                !normalizedPath.StartsWith(GeneratedResourcesPrefix, StringComparison.Ordinal))
-                throw new ArgumentException("Create asset paths must stay inside src/main/resources or src/generated/resources assets/create.", nameof(repositoryRelativePath));
+                !normalizedPath.StartsWith(GeneratedResourcesPrefix, StringComparison.Ordinal) &&
+                !normalizedPath.StartsWith("assets/minecraft/", StringComparison.Ordinal))
+                throw new ArgumentException("Asset paths must stay inside known resource folders (create or minecraft).", nameof(repositoryRelativePath));
 
             RepositoryRelativePath = normalizedPath;
         }
@@ -329,6 +330,8 @@ namespace Constructed.Unity
             yield return Main("models/block/belt_casing/sideways_end.json");
             yield return Main("models/block/belt_casing/sideways_pulley.json");
             yield return Main("models/block/belt_pulley.json");
+            yield return Minecraft("textures/block/dark_oak_log.png");
+            yield return Minecraft("textures/block/dark_oak_log_top.png");
             yield return Main("textures/block/belt.png");
             yield return Main("textures/block/belt_offset.png");
             yield return Main("textures/block/belt_diagonal.png");
@@ -397,6 +400,11 @@ namespace Constructed.Unity
         private static CreatePrivateAssetFileReference Generated(string relativePath)
         {
             return new CreatePrivateAssetFileReference(CreatePrivateAssetFileReference.GeneratedResourcesPrefix + relativePath);
+        }
+
+        private static CreatePrivateAssetFileReference Minecraft(string relativePath)
+        {
+            return new CreatePrivateAssetFileReference("assets/minecraft/" + relativePath);
         }
     }
 }

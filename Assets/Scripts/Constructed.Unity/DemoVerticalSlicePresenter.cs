@@ -590,12 +590,13 @@ namespace Constructed.Unity
 
             ResourceLocation pulleyModelId = ResourceLocation.Parse("create:block/belt_pulley");
             Transform spinRoot = CreateChildRoot(root, "Pulley Shaft Spin");
+            Transform orientationRoot = CreateChildRoot(spinRoot, "Orientation");
             
-            // Align the spin root with the rotation axis
+            // Align the orientation root with the rotation axis
             // The pulley model is Y-aligned by default.
-            spinRoot.localRotation = GetRotationToAxis(runtimeState.RotationAxis);
+            orientationRoot.localRotation = GetRotationToAxis(runtimeState.RotationAxis);
 
-            if (!TryCreatePartialModel(spinRoot, pulleyModelId, WorldBlockModelBaseScale, modelLoader))
+            if (!TryCreatePartialModel(orientationRoot, pulleyModelId, WorldBlockModelBaseScale, modelLoader))
             {
                 // Fallback to full shaft block if partial model fails
                 BlockStatePropertyValue[] shaftVisualProperties =
@@ -1745,6 +1746,13 @@ namespace Constructed.Unity
 
         private Texture2D LoadPrivateCreateTexture(ResourceLocation textureId)
         {
+            if (textureId.Namespace == "minecraft")
+            {
+                return LoadPrivateCreateTexture(
+                    new CreatePrivateAssetFileReference(
+                        "assets/minecraft/textures/" + textureId.Path + ".png"));
+            }
+
             if (textureId.Namespace != "create")
                 return GetMissingCreateItemTexture();
 
@@ -2064,8 +2072,7 @@ namespace Constructed.Unity
 
             return CreatePrivateAssetSyncService.Sync(
                 CreateFirstSlicePrivateAssetManifest.Manifest,
-                referenceRepositoryRoot,
-                privateCreateAssetRoot);
+                projectRoot);
         }
 
         private MinecraftModelLoader CreatePrivateModelLoader()
@@ -2185,7 +2192,7 @@ namespace Constructed.Unity
         {
             return axis switch
             {
-                Axis.X => Quaternion.Euler(0f, 0f, 90f),
+                Axis.X => Quaternion.Euler(90f, 90f, 0f),
                 Axis.Y => Quaternion.identity,
                 Axis.Z => Quaternion.Euler(90f, 0f, 0f),
                 _ => Quaternion.identity

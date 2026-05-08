@@ -9,9 +9,16 @@ namespace Constructed.Unity
         public const string ReferenceRepositoryRelativePath = "References/Create-mc1.21.1-dev";
         public const string PrivateCreateAssetRelativePath = "Assets/PrivateTemp/Create";
 
+        public const string MinecraftResourcesRelativePath = "References/Minecraft-1.21.1-resources";
+
         public static string GetReferenceRepositoryRoot(string projectRoot)
         {
             return CreatePrivateAssetPathResolver.ResolvePath(projectRoot, ReferenceRepositoryRelativePath);
+        }
+
+        public static string GetMinecraftResourcesRoot(string projectRoot)
+        {
+            return CreatePrivateAssetPathResolver.ResolvePath(projectRoot, MinecraftResourcesRelativePath);
         }
 
         public static string GetPrivateCreateAssetRoot(string projectRoot)
@@ -72,20 +79,26 @@ namespace Constructed.Unity
 
     public static class CreatePrivateAssetPathResolver
     {
-        public static string ResolveReferenceSourcePath(string referenceRepositoryRoot, CreatePrivateAssetFileReference file)
+        public static string ResolveReferenceSourcePath(string projectRoot, CreatePrivateAssetFileReference file)
         {
             if (file == null)
                 throw new ArgumentNullException(nameof(file));
 
-            return ResolvePath(referenceRepositoryRoot, file.RepositoryRelativePath);
+            if (file.RepositoryRelativePath.StartsWith("assets/minecraft/", StringComparison.Ordinal))
+            {
+                return ResolvePath(CreatePrivateAssetProjectPaths.GetMinecraftResourcesRoot(projectRoot), file.RepositoryRelativePath);
+            }
+
+            return ResolvePath(CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot), file.RepositoryRelativePath);
         }
 
-        public static string ResolvePrivateAssetPath(string privateAssetRoot, CreatePrivateAssetFileReference file)
+        public static string ResolvePrivateAssetPath(string projectRoot, CreatePrivateAssetFileReference file)
         {
             if (file == null)
                 throw new ArgumentNullException(nameof(file));
 
-            return ResolvePath(privateAssetRoot, file.PrivateRelativePath);
+            string root = ResolvePath(projectRoot, CreatePrivateAssetProjectPaths.PrivateCreateAssetRelativePath);
+            return ResolvePath(root, file.RepositoryRelativePath);
         }
 
         public static string ResolvePath(string rootPath, string relativePath)
@@ -129,8 +142,7 @@ namespace Constructed.Unity
     {
         public static CreatePrivateAssetSyncResult Sync(
             CreatePrivateAssetManifest manifest,
-            string referenceRepositoryRoot,
-            string privateAssetRoot)
+            string projectRoot)
         {
             if (manifest == null)
                 throw new ArgumentNullException(nameof(manifest));
@@ -141,8 +153,8 @@ namespace Constructed.Unity
 
             foreach (CreatePrivateAssetFileReference file in manifest.UniqueFiles)
             {
-                string sourcePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceRepositoryRoot, file);
-                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateAssetRoot, file);
+                string sourcePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(projectRoot, file);
+                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(projectRoot, file);
                 if (!File.Exists(sourcePath))
                 {
                     missingPaths.Add(file.RepositoryRelativePath);
