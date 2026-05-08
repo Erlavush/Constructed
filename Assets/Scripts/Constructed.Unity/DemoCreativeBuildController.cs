@@ -964,7 +964,6 @@ namespace Constructed.Unity
             private static readonly Vector3 MinecraftGuiFlatLight0 = new Vector3(-0.222518995f, -0.171498626f, 0.959725678f);
             private static readonly Vector3 MinecraftGuiFlatLight1 = new Vector3(-0.215012133f, -0.971825242f, 0.096567802f);
 
-            private readonly string projectRoot;
             private readonly string privateCreateAssetRoot;
             private readonly string referenceCreateAssetRoot;
             private readonly string minecraftAssetRoot;
@@ -984,7 +983,6 @@ namespace Constructed.Unity
                 if (string.IsNullOrWhiteSpace(projectRoot))
                     throw new ArgumentException("Project root cannot be empty.", nameof(projectRoot));
 
-                this.projectRoot = projectRoot;
                 privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
                 referenceCreateAssetRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot);
                 minecraftAssetRoot = Path.Combine(projectRoot, MinecraftAssetRootRelativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -1192,7 +1190,7 @@ namespace Constructed.Unity
                     CreatePrivateAssetFileReference file =
                         new CreatePrivateAssetFileReference(
                             CreatePrivateAssetFileReference.MainResourcesPrefix + "textures/" + textureId.Path + ".png");
-                    string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(projectRoot, file);
+                    string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateCreateAssetRoot, file);
                     if (File.Exists(privatePath))
                         return privatePath;
 
@@ -1202,10 +1200,14 @@ namespace Constructed.Unity
 
                 if (textureId.Namespace == "minecraft")
                 {
-                    string minecraftPath = Path.Combine(
+                    CreatePrivateAssetFileReference file = new CreatePrivateAssetFileReference("assets/minecraft/textures/" + textureId.Path + ".png");
+                    string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateCreateAssetRoot, file);
+                    if (File.Exists(privatePath))
+                        return privatePath;
+
+                    return Path.Combine(
                         minecraftTextureRoot,
                         textureId.Path.Replace('/', Path.DirectorySeparatorChar) + ".png");
-                    return File.Exists(minecraftPath) ? minecraftPath : null;
                 }
 
                 return null;
@@ -1235,7 +1237,7 @@ namespace Constructed.Unity
                 if (fallbackIconFile == null)
                     return GetMissingTexture();
 
-                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(projectRoot, fallbackIconFile);
+                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateCreateAssetRoot, fallbackIconFile);
                 if (File.Exists(privatePath))
                     return LoadTextureFromPath(privatePath);
 

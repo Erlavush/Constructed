@@ -92,13 +92,12 @@ namespace Constructed.Unity
             return ResolvePath(CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot), file.RepositoryRelativePath);
         }
 
-        public static string ResolvePrivateAssetPath(string projectRoot, CreatePrivateAssetFileReference file)
+        public static string ResolvePrivateAssetPath(string privateAssetRoot, CreatePrivateAssetFileReference file)
         {
             if (file == null)
                 throw new ArgumentNullException(nameof(file));
 
-            string root = ResolvePath(projectRoot, CreatePrivateAssetProjectPaths.PrivateCreateAssetRelativePath);
-            return ResolvePath(root, file.RepositoryRelativePath);
+            return ResolvePath(privateAssetRoot, file.RepositoryRelativePath);
         }
 
         public static string ResolvePath(string rootPath, string relativePath)
@@ -151,10 +150,11 @@ namespace Constructed.Unity
             List<string> unchangedPaths = new List<string>();
             List<string> missingPaths = new List<string>();
 
+            string privateRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
             foreach (CreatePrivateAssetFileReference file in manifest.UniqueFiles)
             {
                 string sourcePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(projectRoot, file);
-                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(projectRoot, file);
+                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateRoot, file);
                 if (!File.Exists(sourcePath))
                 {
                     missingPaths.Add(file.RepositoryRelativePath);
