@@ -197,7 +197,8 @@ namespace Constructed.Unity
             ResourceLocation.Parse("create:creative_motor"),
             ResourceLocation.Parse("create:creative_crate"),
             ResourceLocation.Parse("create:brass_funnel"),
-            ResourceLocation.Parse("create:item_vault")
+            ResourceLocation.Parse("create:item_vault"),
+            ResourceLocation.Parse("create:wrench")
         };
 
         public static readonly ResourceLocation[] BlockCatalogIds =
@@ -262,6 +263,12 @@ namespace Constructed.Unity
                     Main("textures/block/vault/vault_front_small.png"),
                     Main("textures/block/vault/vault_side_small.png"),
                     Main("textures/block/vault/vault_top_small.png")),
+
+                Item("create:wrench", "Wrench",
+                    Generated("models/item/wrench.json"),
+                    Main("models/item/wrench/item.json"),
+                    Main("models/item/wrench/gear.json"),
+                    Main("textures/item/wrench.png")),
 
                 Block("create:shaft", "Shaft Block",
                     Generated("blockstates/shaft.json"),

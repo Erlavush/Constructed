@@ -120,6 +120,8 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 
 - 2026-05-08: Implemented Conveyor Belt Pulleys. Added `PULLEY` state to `MIDDLE` belt segments, enabling shaft insertion via right-click interaction. Updated kinetic connection rules and the renderer to use the official `create:block/belt_pulley` partial model. Verified that breaking pulleys drops shafts and that pulleys correctly propagate rotation power. **Fixed "purplish" texture issue by adding `minecraft` namespace support to the asset pipeline and refined rotation parity using a nested `Orientation` root for partial models.**
 
+- 2026-05-08: Completed the full Wrench Tool implementation across four phases. This includes the `create:wrench` item registration, the `IWrenchable` interface for block-specific interaction, and global rotation math in `WrenchableHelper`. Standard kinetic blocks (Shaft, Creative Motor, Belt, Item Vault) now support right-click rotation and sneak-right-click dismantling with 1:1 parity to Create mod's axis/facing cycles. The visual pipeline was upgraded to support animated software-rasterized icons for the wrench's spinning gear and private asset synchronization for the `item/wrench/gear` model. Sound placeholders (`create:wrench_rotate`, `create:wrench_remove`) were integrated into the interaction logic. Verification: successfully implemented the spinning gear icon in `DemoCreativeBuildController` and added `ItemVault` wrench support; compilation confirmed via open-editor `Editor.log` fallback.
+
 ## Next Step
 
-Implement Cogwheels and Gearboxes to expand kinetic propagation options, allowing for speed changes and axis redirection.
+Implement the first transported-item movement slice using the new belt runtime snapshot, then wire belt/funnel/tunnel interaction entry points incrementally.

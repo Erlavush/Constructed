@@ -66,7 +66,8 @@ namespace Constructed.Create
             BlockDefinition belt,
             BlockDefinition creativeCrate,
             BlockDefinition brassFunnel,
-            BlockDefinition itemVault)
+            BlockDefinition itemVault,
+            WrenchItem wrench)
         {
             Items = items;
             Blocks = blocks;
@@ -80,6 +81,7 @@ namespace Constructed.Create
             CreativeCrate = creativeCrate;
             BrassFunnel = brassFunnel;
             ItemVault = itemVault;
+            Wrench = wrench;
         }
 
         public Registry<ItemDefinition> Items { get; }
@@ -106,10 +108,12 @@ namespace Constructed.Create
 
         public BlockDefinition ItemVault { get; }
 
+        public WrenchItem Wrench { get; }
+
         public static DemoContentCatalog Create()
         {
             ItemDefinition demoTransferItem = new ItemDefinition(DemoTransferItemId);
-            ItemDefinition wrench = new ItemDefinition(WrenchItemId);
+            ItemDefinition wrench = new WrenchItem(WrenchItemId);
             Registry<ItemDefinition> items = new Registry<ItemDefinition>(ResourceLocation.Parse("minecraft:item"));
             items.Register(demoTransferItem.Id, demoTransferItem);
             items.Register(wrench.Id, wrench);
@@ -118,11 +122,11 @@ namespace Constructed.Create
             BlockEntityType itemVaultBlockEntityType = ItemVaultBlock.CreateBlockEntityType(items);
             BlockDefinition air = new BlockDefinition(AirId);
             BlockDefinition surface = new BlockDefinition(SurfaceBlockId);
-            BlockDefinition creativeMotor = new BlockDefinition(CreativeMotorBlockId, new IStateProperty[] { FacingProperty });
-            BlockDefinition shaft = new BlockDefinition(ShaftBlockId, new IStateProperty[] { AxisProperty });
+            BlockDefinition creativeMotor = new CreativeMotorBlock(CreativeMotorBlockId, new IStateProperty[] { FacingProperty });
+            BlockDefinition shaft = new ShaftBlock(ShaftBlockId, new IStateProperty[] { AxisProperty });
 
             BeltBlockLifecycle beltLifecycle = new BeltBlockLifecycle();
-            BlockDefinition belt = new BlockDefinition(
+            BlockDefinition belt = new BeltBlock(
                 BeltBlockId,
                 new IStateProperty[]
                 {
@@ -133,8 +137,8 @@ namespace Constructed.Create
                     BeltWaterloggedProperty
                 },
                 beltLifecycle);
-            BlockDefinition creativeCrate = new BlockDefinition(CreativeCrateBlockId, new IStateProperty[] { FacingProperty });
-            BlockDefinition brassFunnel = new BlockDefinition(BrassFunnelBlockId, new IStateProperty[] { FacingProperty });
+            BlockDefinition creativeCrate = new GenericDirectionalBlock(CreativeCrateBlockId, new IStateProperty[] { FacingProperty });
+            BlockDefinition brassFunnel = new GenericDirectionalBlock(BrassFunnelBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition itemVault = ItemVaultBlock.CreateDefinition(itemVaultBlockEntityType);
 
             Registry<BlockDefinition> blocks = new Registry<BlockDefinition>(ResourceLocation.Parse("minecraft:block"));
@@ -160,7 +164,8 @@ namespace Constructed.Create
                 belt,
                 creativeCrate,
                 brassFunnel,
-                itemVault);
+                itemVault,
+                (WrenchItem)wrench);
 
             beltLifecycle.Initialize(catalog);
 

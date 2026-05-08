@@ -110,6 +110,84 @@ namespace Constructed.Core
             };
         }
 
+        public static Direction ClockWise(this Direction direction, Axis axis)
+        {
+            switch (axis)
+            {
+                case Axis.X:
+                    return direction != Direction.West && direction != Direction.East ? direction.ClockWiseX() : direction;
+                case Axis.Y:
+                    return direction != Direction.Up && direction != Direction.Down ? direction.ClockWise() : direction;
+                case Axis.Z:
+                    return direction != Direction.North && direction != Direction.South ? direction.ClockWiseZ() : direction;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(axis), axis, null);
+            }
+        }
+
+        public static Direction CounterClockWise(this Direction direction, Axis axis)
+        {
+            switch (axis)
+            {
+                case Axis.X:
+                    return direction != Direction.West && direction != Direction.East ? direction.CounterClockWiseX() : direction;
+                case Axis.Y:
+                    return direction != Direction.Up && direction != Direction.Down ? direction.CounterClockWise() : direction;
+                case Axis.Z:
+                    return direction != Direction.North && direction != Direction.South ? direction.CounterClockWiseZ() : direction;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(axis), axis, null);
+            }
+        }
+
+        private static Direction ClockWiseX(this Direction direction)
+        {
+            return direction switch
+            {
+                Direction.Down => Direction.South,
+                Direction.Up => Direction.North,
+                Direction.North => Direction.Down,
+                Direction.South => Direction.Up,
+                _ => throw new InvalidOperationException($"Unable to get X-rotated facing of {direction}")
+            };
+        }
+
+        private static Direction CounterClockWiseX(this Direction direction)
+        {
+            return direction switch
+            {
+                Direction.Down => Direction.North,
+                Direction.Up => Direction.South,
+                Direction.North => Direction.Up,
+                Direction.South => Direction.Down,
+                _ => throw new InvalidOperationException($"Unable to get X-rotated facing of {direction}")
+            };
+        }
+
+        private static Direction ClockWiseZ(this Direction direction)
+        {
+            return direction switch
+            {
+                Direction.Down => Direction.West,
+                Direction.Up => Direction.East,
+                Direction.West => Direction.Up,
+                Direction.East => Direction.Down,
+                _ => throw new InvalidOperationException($"Unable to get Z-rotated facing of {direction}")
+            };
+        }
+
+        private static Direction CounterClockWiseZ(this Direction direction)
+        {
+            return direction switch
+            {
+                Direction.Down => Direction.East,
+                Direction.Up => Direction.West,
+                Direction.West => Direction.Down,
+                Direction.East => Direction.Up,
+                _ => throw new InvalidOperationException($"Unable to get Z-rotated facing of {direction}")
+            };
+        }
+
         public static Direction CounterClockWise(this Direction direction)
         {
             return direction switch

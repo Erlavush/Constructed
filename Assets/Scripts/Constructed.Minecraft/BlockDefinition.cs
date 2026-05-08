@@ -4,7 +4,7 @@ using Constructed.Core;
 
 namespace Constructed.Minecraft
 {
-    public sealed class BlockDefinition
+    public class BlockDefinition
     {
         private readonly Dictionary<string, IStateProperty> propertiesByName;
         private readonly List<IStateProperty> properties;

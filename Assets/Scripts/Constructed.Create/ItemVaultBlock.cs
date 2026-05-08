@@ -33,11 +33,29 @@ namespace Constructed.Create
 
         public static BlockDefinition CreateDefinition(BlockEntityType blockEntityType)
         {
-            return new BlockDefinition(
+            return new ItemVaultBlockDefinition(
                 Id,
                 new IStateProperty[] { HorizontalAxisProperty, LargeProperty },
-                BlockLifecycle.None,
                 blockEntityType);
+        }
+    }
+
+    public class ItemVaultBlockDefinition : BlockDefinition, IWrenchable
+    {
+        public ItemVaultBlockDefinition(ResourceLocation id, IStateProperty[] properties, BlockEntityType blockEntityType)
+            : base(id, properties, BlockLifecycle.None, blockEntityType)
+        {
+        }
+
+        public BlockState GetRotatedBlockState(BlockState state, Direction clickedFace)
+        {
+            // Vaults rotate their axis property
+            return WrenchableHelper.GetRotatedBlockState(state, clickedFace);
+        }
+
+        public bool OnWrenched(BlockState state, Direction clickedFace, bool isSneaking)
+        {
+            return isSneaking;
         }
     }
 }

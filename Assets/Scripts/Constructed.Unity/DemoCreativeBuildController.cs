@@ -207,16 +207,17 @@ namespace Constructed.Unity
         {
             if (presenter == null)
                 return;
-
+        
             Camera camera = GetComponent<Camera>();
             if (camera == null)
                 return;
-
-            ResourceLocation? selectedBlockId = hotbarSlots[selectedHotbarSlotIndex];
-            bool beltConnectorSelected =
-                selectedBlockId.HasValue && selectedBlockId.Value == DemoContentCatalog.BeltConnectorItemId;
+        
+            ResourceLocation? selectedItemId = hotbarSlots[selectedHotbarSlotIndex];
             bool hasHit = TryRaycastWorld(camera, out DemoWorldHit hit);
-
+            bool isSneaking = IsSneakHeld();
+        
+            // Special handling for Belt Connector
+            bool beltConnectorSelected = selectedItemId.HasValue && selectedItemId.Value == DemoContentCatalog.BeltConnectorItemId;
             if (beltConnectorSelected)
             {
                 HandleBeltConnectorInteraction(hasHit, hit);
@@ -225,33 +226,68 @@ namespace Constructed.Unity
             {
                 StopBeltPreviewParticles();
             }
-
+        
+            // Left Click: Break Block (Minecraft alignment)
             if (DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Left))
             {
                 if (beltConnectorSelected)
-                    return;
+                    return; // Belt connector handles its own left-click for cancel/selection
                 if (!hasHit)
                     return;
-                if (!selectedBlockId.HasValue)
+        
+                presenter.TryRemoveBlock(hit.Position);
+                return;
+            }
+        
+            // Right Click: Use Item / Place Block / Wrench (Minecraft alignment)
+            if (DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Right))
+            {
+                if (!hasHit)
                     return;
-
-                if (HandleItemOnBlockInteraction(selectedBlockId.Value, hit))
+        
+                // Wrench Handling
+                if (selectedItemId.HasValue && selectedItemId.Value == DemoContentCatalog.WrenchItemId)
+                {
+                    WrenchItem wrench = presenter.Catalog.Wrench;
+                    BlockState state = presenter.World.GetBlockState(hit.Position);
+        
+                    if (isSneaking)
+                    {
+                        // Dismantle
+                        if (wrench.Dismantle(presenter.World, hit.Position, state, hit.Face))
+                        {
+                            presenter.Rebuild();
+                            return;
+                        }
+                        
+                        // Default dismantle if item doesn't handle it: just remove
+                        presenter.TryRemoveBlock(hit.Position);
+                        return;
+                    }
+                    else
+                    {
+                        // Rotate
+                        wrench.Rotate(presenter.World, hit.Position, state, hit.Face);
+                        presenter.Rebuild();
+                        return;
+                    }
+                }
+        
+                // Item on Block interaction (Shaft/Wrench special cases for belts)
+                if (selectedItemId.HasValue && HandleItemOnBlockInteraction(selectedItemId.Value, hit))
                 {
                     presenter.Rebuild();
                     return;
                 }
-
-                Direction nearestLookingDirection = GetNearestDirection(camera.transform.forward);
-                presenter.TryPlaceBlock(selectedBlockId.Value, hit.Position.Relative(hit.Face), nearestLookingDirection);
-                return;
+        
+                // Default Placement
+                if (selectedItemId.HasValue)
+                {
+                    Direction nearestLookingDirection = GetNearestDirection(camera.transform.forward);
+                    // Place relative to the face clicked
+                    presenter.TryPlaceBlock(selectedItemId.Value, hit.Position.Relative(hit.Face), nearestLookingDirection);
+                }
             }
-
-            if (!DemoInputSystemAdapter.WasMouseButtonPressedThisFrame(DemoMouseButton.Right))
-                return;
-            if (!hasHit)
-                return;
-
-            presenter.TryRemoveBlock(hit.Position);
         }
 
         private bool HandleItemOnBlockInteraction(ResourceLocation itemId, DemoWorldHit hit)
@@ -625,7 +661,7 @@ namespace Constructed.Unity
                 bool placeable = entry.ItemId == DemoContentCatalog.CreativeMotorBlockId ||
                     entry.ItemId == DemoContentCatalog.ShaftBlockId ||
                     entry.ItemId == DemoContentCatalog.BeltConnectorItemId ||
-                    entry.ItemId == DemoContentCatalog.WrenchItemId;
+                    entry.ItemId == WrenchItem.WrenchItemId;
                 BuildInventoryEntry inventoryEntry = new BuildInventoryEntry(
                     entry.ItemId,
                     entry.Label,
@@ -994,10 +1030,94 @@ namespace Constructed.Unity
                 if (entry == null)
                     return null;
 
+                bool isWrench = entry.Id == WrenchItem.WrenchItemId;
+                if (isWrench)
+                {
+                    return TryCreateWrenchIcon(entry);
+                }
+
                 if (iconTexturesById.TryGetValue(entry.Id, out Texture2D existingIcon))
                     return existingIcon;
 
                 return TryCreateModelBackedIcon(entry) ?? LoadFallbackTexture(entry.FallbackIconFile);
+            }
+
+            private Texture2D TryCreateWrenchIcon(BuildInventoryEntry entry)
+            {
+                float rotationAngle = (float)(Time.timeAsDouble * 180.0) % 360f;
+                string cacheKey = $"wrench_{Mathf.FloorToInt(rotationAngle / 10f)}";
+                ResourceLocation cacheId = ResourceLocation.Parse("create:wrench_animated");
+
+                if (iconTexturesById.TryGetValue(cacheId, out Texture2D cached) && cached.name == cacheKey)
+                    return cached;
+
+                if (!TryLoadItemModel(entry.PreviewModelId, out MinecraftResolvedModel wrenchModel) || wrenchModel == null)
+                    return null;
+
+                ResourceLocation gearId = ResourceLocation.Parse("create:item/wrench/gear");
+                if (!TryLoadItemModel(gearId, out MinecraftResolvedModel gearModel) || gearModel == null)
+                    return CreateRenderedItemIcon(wrenchModel);
+
+                Texture2D icon = CreateWrenchIcon(wrenchModel, gearModel, rotationAngle);
+                if (icon != null)
+                {
+                    if (iconTexturesById.TryGetValue(cacheId, out Texture2D oldIcon))
+                        DestroyObject(oldIcon);
+                    
+                    icon.name = cacheKey;
+                    iconTexturesById[cacheId] = icon;
+                }
+                return icon;
+            }
+
+            private Texture2D CreateWrenchIcon(MinecraftResolvedModel wrenchModel, MinecraftResolvedModel gearModel, float rotationAngle)
+            {
+                List<SoftwareIconFace> visibleFaces = new List<SoftwareIconFace>();
+                List<SoftwareIconFace> allFaces = new List<SoftwareIconFace>();
+                MinecraftModelDisplayTransform display = wrenchModel.HasGuiDisplay ? wrenchModel.GuiDisplay : DefaultItemModelDisplay;
+                Quaternion displayRotation = CreateMinecraftDisplayRotation(display.Rotation);
+                Vector3 displayScale = Vector3.Scale(Vector3.one * ItemPreviewBaseScale, display.Scale);
+                Vector3 displayTranslation = display.Translation / 16f;
+
+                AddFacesToSoftwareIcon(wrenchModel, displayRotation, displayScale, displayTranslation, visibleFaces, allFaces);
+
+                Quaternion gearRotation = displayRotation * Quaternion.AngleAxis(rotationAngle, Vector3.up);
+                AddFacesToSoftwareIcon(gearModel, gearRotation, displayScale, displayTranslation, visibleFaces, allFaces);
+
+                Texture2D icon = RasterizeSoftwareIcon(visibleFaces.Count > 0 ? visibleFaces : allFaces);
+                if (icon != null)
+                    icon.name = "Wrench Icon " + rotationAngle;
+                return icon;
+            }
+
+            private void AddFacesToSoftwareIcon(
+                MinecraftResolvedModel model,
+                Quaternion rotation,
+                Vector3 scale,
+                Vector3 translation,
+                List<SoftwareIconFace> visibleFaces,
+                List<SoftwareIconFace> allFaces)
+            {
+                foreach (MinecraftModelElement element in model.Elements)
+                {
+                    foreach (MinecraftModelFace face in element.Faces.Values)
+                    {
+                        Vector3[] vertices = CreateModelFaceVertices(element, face.Direction);
+                        for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
+                            vertices[vertexIndex] = TransformItemModelVertex(vertices[vertexIndex], rotation, scale, translation);
+
+                        Texture2D texture = LoadModelTexture(face.TextureId);
+                        if (texture == null)
+                            continue;
+
+                        Vector3 normal = CalculateFaceNormal(vertices);
+                        float lightMultiplier = CalculateMinecraftGuiLighting(normal, model.UsesBlockLight);
+                        SoftwareIconFace iconFace = new SoftwareIconFace(vertices, CreateModelFaceUvs(face, model.TextureSize), texture, lightMultiplier);
+                        allFaces.Add(iconFace);
+                        if (normal.z > FrontFaceCullThreshold)
+                            visibleFaces.Add(iconFace);
+                    }
+                }
             }
 
             public void Dispose()
@@ -1126,32 +1246,11 @@ namespace Constructed.Unity
                 Vector3 displayScale = Vector3.Scale(Vector3.one * ItemPreviewBaseScale, display.Scale);
                 Vector3 displayTranslation = display.Translation / 16f;
 
-                foreach (MinecraftModelElement element in model.Elements)
-                {
-                    foreach (MinecraftModelFace face in element.Faces.Values)
-                    {
-                        Vector3[] vertices = CreateModelFaceVertices(element, face.Direction);
-                        for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
-                            vertices[vertexIndex] = TransformItemModelVertex(vertices[vertexIndex], displayRotation, displayScale, displayTranslation);
-
-                        Texture2D texture = LoadModelTexture(face.TextureId);
-                        if (texture == null)
-                            continue;
-
-                        Vector3 normal = CalculateFaceNormal(vertices);
-                        float lightMultiplier = CalculateMinecraftGuiLighting(normal, model.UsesBlockLight);
-                        SoftwareIconFace iconFace = new SoftwareIconFace(vertices, CreateModelFaceUvs(face, model.TextureSize), texture, lightMultiplier);
-                        allFaces.Add(iconFace);
-                        if (normal.z > FrontFaceCullThreshold)
-                            visibleFaces.Add(iconFace);
-                    }
-                }
+                AddFacesToSoftwareIcon(model, displayRotation, displayScale, displayTranslation, visibleFaces, allFaces);
 
                 Texture2D icon = RasterizeSoftwareIcon(visibleFaces.Count > 0 ? visibleFaces : allFaces);
-                if (icon == null)
-                    return null;
-
-                icon.name = "Rendered Icon " + model.ModelId.Path;
+                if (icon != null)
+                    icon.name = "Rendered Icon " + model.ModelId.Path;
                 return icon;
             }
 

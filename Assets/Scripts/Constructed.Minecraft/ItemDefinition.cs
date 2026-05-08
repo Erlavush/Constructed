@@ -3,7 +3,7 @@ using Constructed.Core;
 
 namespace Constructed.Minecraft
 {
-    public sealed class ItemDefinition
+    public class ItemDefinition
     {
         public const int DefaultMaxStackSize = 64;
 
