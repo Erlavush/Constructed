@@ -153,7 +153,18 @@ namespace Constructed.Create
                     continue;
 
                 Axis rotationAxis = GetRotationAxis(world.GetBlockState(controllerPosition), catalog);
-                float chainSpeed = ResolveChainSpeed(chain, rotationAxis, resolvedKinetics);
+                
+                // Find chain speed from any segment already in the kinetic snapshot
+                float chainSpeed = 0f;
+                foreach (BlockPos segmentPos in chain)
+                {
+                    if (resolvedKinetics.TryGet(segmentPos, out DemoKineticComponentState kineticState))
+                    {
+                        chainSpeed = kineticState.Speed;
+                        break;
+                    }
+                }
+
                 for (int index = 0; index < chain.Count; index++)
                 {
                     BlockPos segmentPosition = chain[index];
@@ -223,40 +234,6 @@ namespace Constructed.Create
             return next;
         }
 
-        private static float ResolveChainSpeed(
-            IReadOnlyList<BlockPos> chain,
-            Axis rotationAxis,
-            DemoKineticSnapshot kinetics)
-        {
-            if (kinetics == null || chain == null || chain.Count == 0)
-                return 0f;
-
-            float? chainSpeed = null;
-            for (int index = 0; index < chain.Count; index++)
-            {
-                BlockPos segment = chain[index];
-                for (int directionIndex = 0; directionIndex < NeighborDirections.Length; directionIndex++)
-                {
-                    Direction direction = NeighborDirections[directionIndex];
-                    BlockPos neighbor = segment.Relative(direction);
-                    if (!kinetics.TryGet(neighbor, out DemoKineticComponentState state))
-                        continue;
-                    if (state.Axis != rotationAxis || state.Speed == 0f)
-                        continue;
-
-                    if (!chainSpeed.HasValue)
-                    {
-                        chainSpeed = state.Speed;
-                        continue;
-                    }
-
-                    if (Math.Sign(chainSpeed.Value) != Math.Sign(state.Speed))
-                        return 0f;
-                }
-            }
-
-            return chainSpeed ?? 0f;
-        }
 
         private static BlockPos FindControllerPosition(BlockWorld world, DemoContentCatalog catalog, BlockPos seed)
         {

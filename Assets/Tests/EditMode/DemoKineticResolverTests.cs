@@ -68,6 +68,44 @@ namespace Constructed.Tests
             Assert.IsFalse(snapshot.TryGet(DemoVerticalSliceBootstrap.SecondShaftPosition, out _));
         }
 
+        [Test]
+        public void ResolverPropagatesThroughBeltsToAttachedShafts()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            
+            // Layout: Motor(E) -> Shaft(X) -> Belt(Start, N) -> Belt(End, N) -> Shaft(X)
+            // Motor at (0, 5, 0)
+            BlockPos motorPos = new BlockPos(0, 5, 0);
+            BlockPos shaft1Pos = motorPos.Relative(Direction.East);
+            BlockPos belt1Pos = shaft1Pos.Relative(Direction.East);
+            BlockPos belt2Pos = belt1Pos.Relative(Direction.North);
+            BlockPos shaft2Pos = belt2Pos.Relative(Direction.East);
+            
+            world.SetBlockState(motorPos, catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+            world.SetBlockState(shaft1Pos, catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+            
+            // Belt rotation axis for North-facing horizontal belt is X
+            world.SetBlockState(belt1Pos, catalog.Belt.DefaultState
+                .With(DemoContentCatalog.BeltFacingProperty, Direction.North)
+                .With(DemoContentCatalog.BeltSlopeProperty, DemoBeltSlope.Horizontal)
+                .With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.Start));
+            world.SetBlockState(belt2Pos, catalog.Belt.DefaultState
+                .With(DemoContentCatalog.BeltFacingProperty, Direction.North)
+                .With(DemoContentCatalog.BeltSlopeProperty, DemoBeltSlope.Horizontal)
+                .With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.End));
+                
+            world.SetBlockState(shaft2Pos, catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+
+            DemoKineticSnapshot snapshot = DemoKineticResolver.Resolve(world, catalog);
+
+            AssertKineticState(snapshot, motorPos, Axis.X, 16f);
+            AssertKineticState(snapshot, shaft1Pos, Axis.X, 16f);
+            AssertKineticState(snapshot, belt1Pos, Axis.X, 16f);
+            AssertKineticState(snapshot, belt2Pos, Axis.X, 16f);
+            AssertKineticState(snapshot, shaft2Pos, Axis.X, 16f);
+        }
+
         private static void AssertKineticState(DemoKineticSnapshot snapshot, BlockPos position, Axis expectedAxis, float expectedSpeed)
         {
             Assert.IsTrue(snapshot.TryGet(position, out DemoKineticComponentState state), position.ToString());
