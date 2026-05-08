@@ -125,7 +125,7 @@ namespace Constructed.Create
                         continue;
 
                     BlockState neighborState = world.GetBlockState(neighborPos);
-                    if (neighborState == null || neighborState.IsAir)
+                    if (neighborState == null || world.IsAir(neighborState))
                         continue;
 
                     // Connection logic

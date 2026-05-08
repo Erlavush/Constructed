@@ -77,6 +77,62 @@ namespace Constructed.Create
 
         public void OnNeighborChanged(NeighborBlockChange change)
         {
+            if (catalog == null)
+                return;
+
+            BlockState currentBelt = change.World.GetBlockState(change.Position);
+            if (currentBelt.Definition.Id != catalog.Belt.Id)
+                return;
+
+            // Check if the neighbor change is along the rotation axis of the belt
+            Axis rotationAxis = DemoBeltRuntimeResolver.GetRotationAxis(currentBelt, catalog);
+            if (change.DirectionToChanged.Axis() != rotationAxis)
+                return;
+
+            // Check if the neighbor at this side is now a compatible shaft (or motor)
+            BlockState neighborState = change.World.GetBlockState(change.ChangedPosition);
+            bool hasKineticInput = false;
+            
+            if (neighborState.Definition.Id == catalog.Shaft.Id)
+            {
+                hasKineticInput = neighborState.Get(DemoContentCatalog.AxisProperty) == rotationAxis;
+            }
+            else if (neighborState.Definition.Id == catalog.CreativeMotor.Id)
+            {
+                hasKineticInput = neighborState.Get(DemoContentCatalog.FacingProperty).Axis() == rotationAxis &&
+                                 neighborState.Get(DemoContentCatalog.FacingProperty).Opposite() == change.DirectionToChanged;
+            }
+
+            DemoBeltPart currentPart = currentBelt.Get(DemoContentCatalog.BeltPartProperty);
+
+            if (currentPart == DemoBeltPart.Middle && hasKineticInput)
+            {
+                // Convert to Pulley to allow kinetic propagation
+                change.World.SetBlockState(change.Position, currentBelt.With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.Pulley));
+            }
+            else if (currentPart == DemoBeltPart.Pulley && !hasKineticInput)
+            {
+                // Check the other side along the same axis before reverting to Middle
+                BlockPos otherSidePos = change.Position.Relative(change.DirectionToChanged.Opposite());
+                BlockState otherSideState = change.World.GetBlockState(otherSidePos);
+                
+                bool hasOtherInput = false;
+                if (otherSideState.Definition.Id == catalog.Shaft.Id)
+                {
+                    hasOtherInput = otherSideState.Get(DemoContentCatalog.AxisProperty) == rotationAxis;
+                }
+                else if (otherSideState.Definition.Id == catalog.CreativeMotor.Id)
+                {
+                    hasOtherInput = otherSideState.Get(DemoContentCatalog.FacingProperty).Axis() == rotationAxis &&
+                                   otherSideState.Get(DemoContentCatalog.FacingProperty).Opposite() == change.DirectionToChanged.Opposite();
+                }
+
+                if (!hasOtherInput)
+                {
+                    // No kinetic input left at this axial position, revert to Middle
+                    change.World.SetBlockState(change.Position, currentBelt.With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.Middle));
+                }
+            }
         }
 
         public void OnScheduledTick(ScheduledBlockTick tick)
