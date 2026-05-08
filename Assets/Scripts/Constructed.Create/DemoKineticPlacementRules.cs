@@ -109,6 +109,16 @@ namespace Constructed.Create
             if (id == catalog.CreativeMotor.Id)
                 return state.Get(DemoContentCatalog.FacingProperty) == face;
 
+            if (id == catalog.Belt.Id)
+            {
+                DemoBeltPart part = state.Get(DemoContentCatalog.BeltPartProperty);
+                if (part == DemoBeltPart.Middle)
+                    return false;
+                
+                Axis rotationAxis = DemoBeltRuntimeResolver.GetRotationAxis(state, catalog);
+                return rotationAxis == face.Axis();
+            }
+
             return false;
         }
 

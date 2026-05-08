@@ -588,22 +588,32 @@ namespace Constructed.Unity
             if (modelLoader == null || blockStateLoader == null)
                 return false;
 
-            BlockStatePropertyValue[] shaftVisualProperties =
-            {
-                new BlockStatePropertyValue("axis", DemoContentCatalog.AxisProperty.Serialize(runtimeState.RotationAxis))
-            };
-
+            ResourceLocation pulleyModelId = ResourceLocation.Parse("create:block/belt_pulley");
             Transform spinRoot = CreateChildRoot(root, "Pulley Shaft Spin");
-            if (!TryCreateCombinedBlockModel(
-                    spinRoot,
-                    DemoContentCatalog.ShaftBlockId,
-                    shaftVisualProperties,
-                    WorldBlockModelBaseScale,
-                    modelLoader,
-                    blockStateLoader))
+            
+            // Align the spin root with the rotation axis
+            // The pulley model is Y-aligned by default.
+            spinRoot.localRotation = GetRotationToAxis(runtimeState.RotationAxis);
+
+            if (!TryCreatePartialModel(spinRoot, pulleyModelId, WorldBlockModelBaseScale, modelLoader))
             {
-                DestroyUnityObject(spinRoot.gameObject);
-                return false;
+                // Fallback to full shaft block if partial model fails
+                BlockStatePropertyValue[] shaftVisualProperties =
+                {
+                    new BlockStatePropertyValue("axis", DemoContentCatalog.AxisProperty.Serialize(runtimeState.RotationAxis))
+                };
+
+                if (!TryCreateCombinedBlockModel(
+                        spinRoot,
+                        DemoContentCatalog.ShaftBlockId,
+                        shaftVisualProperties,
+                        WorldBlockModelBaseScale,
+                        modelLoader,
+                        blockStateLoader))
+                {
+                    DestroyUnityObject(spinRoot.gameObject);
+                    return false;
+                }
             }
 
             if (runtimeState.Speed != 0f)
@@ -617,6 +627,40 @@ namespace Constructed.Unity
             }
 
             return true;
+        }
+
+        private bool TryCreatePartialModel(
+            Transform root,
+            ResourceLocation modelId,
+            float baseScale,
+            MinecraftModelLoader modelLoader)
+        {
+            if (modelLoader == null)
+                return false;
+
+            try
+            {
+                MinecraftResolvedModel model = modelLoader.LoadModel(modelId);
+                if (model.Elements.Count == 0)
+                    return false;
+
+                int faceIndex = 0;
+                foreach (MinecraftModelElement element in model.Elements)
+                {
+                    foreach (MinecraftModelFace face in element.Faces.Values)
+                    {
+                        CreateModelFaceObject(root, model, element, face, faceIndex);
+                        faceIndex++;
+                    }
+                }
+
+                root.localScale = Vector3.one * baseScale;
+                return faceIndex > 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         private void CreateItemCatalog(Transform root, MinecraftModelLoader itemModelLoader)
@@ -2135,6 +2179,17 @@ namespace Constructed.Unity
                 default:
                     throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
             }
+        }
+
+        private static Quaternion GetRotationToAxis(Axis axis)
+        {
+            return axis switch
+            {
+                Axis.X => Quaternion.Euler(0f, 0f, 90f),
+                Axis.Y => Quaternion.identity,
+                Axis.Z => Quaternion.Euler(90f, 0f, 0f),
+                _ => Quaternion.identity
+            };
         }
 
         private static Vector3 ToUnityAxisVector(Axis axis)

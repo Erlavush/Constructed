@@ -235,6 +235,12 @@ namespace Constructed.Unity
                 if (!selectedBlockId.HasValue)
                     return;
 
+                if (HandleItemOnBlockInteraction(selectedBlockId.Value, hit))
+                {
+                    presenter.Rebuild();
+                    return;
+                }
+
                 Direction nearestLookingDirection = GetNearestDirection(camera.transform.forward);
                 presenter.TryPlaceBlock(selectedBlockId.Value, hit.Position.Relative(hit.Face), nearestLookingDirection);
                 return;
@@ -246,6 +252,39 @@ namespace Constructed.Unity
                 return;
 
             presenter.TryRemoveBlock(hit.Position);
+        }
+
+        private bool HandleItemOnBlockInteraction(ResourceLocation itemId, DemoWorldHit hit)
+        {
+            if (presenter == null)
+                return false;
+
+            BlockState clickedState = presenter.World.GetBlockState(hit.Position);
+            if (clickedState.Definition.Id != DemoContentCatalog.BeltBlockId)
+                return false;
+
+            DemoBeltPart part = clickedState.Get(DemoContentCatalog.BeltPartProperty);
+
+            // Shaft insertion
+            if (itemId == DemoContentCatalog.ShaftBlockId && part == DemoBeltPart.Middle)
+            {
+                Axis beltRotationAxis = DemoBeltRuntimeResolver.GetRotationAxis(clickedState, presenter.Catalog);
+                // In this demo, we assume the player places the shaft with its default orientation or we align it.
+                // Create requires the shaft axis to match the belt's rotation axis.
+                presenter.World.SetBlockState(hit.Position, clickedState.With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.Pulley));
+                return true;
+            }
+
+            // Wrench extraction
+            if (itemId == DemoContentCatalog.WrenchItemId && part == DemoBeltPart.Pulley)
+            {
+                presenter.World.SetBlockState(hit.Position, clickedState.With(DemoContentCatalog.BeltPartProperty, DemoBeltPart.Middle));
+                // We should also drop a shaft, but in creative mode we just convert back.
+                // However, the lifecycle should handle restoring the physical shaft if we break it.
+                return true;
+            }
+
+            return false;
         }
 
         private void HandleBeltConnectorInteraction(bool hasHit, DemoWorldHit hit)
@@ -585,7 +624,8 @@ namespace Constructed.Unity
             {
                 bool placeable = entry.ItemId == DemoContentCatalog.CreativeMotorBlockId ||
                     entry.ItemId == DemoContentCatalog.ShaftBlockId ||
-                    entry.ItemId == DemoContentCatalog.BeltConnectorItemId;
+                    entry.ItemId == DemoContentCatalog.BeltConnectorItemId ||
+                    entry.ItemId == DemoContentCatalog.WrenchItemId;
                 BuildInventoryEntry inventoryEntry = new BuildInventoryEntry(
                     entry.ItemId,
                     entry.Label,
@@ -615,7 +655,9 @@ namespace Constructed.Unity
             if (!hotbarSlots[2].HasValue)
                 hotbarSlots[2] = DemoContentCatalog.BeltConnectorItemId;
             if (!hotbarSlots[3].HasValue)
-                hotbarSlots[3] = DemoContentCatalog.SurfaceBlockId;
+                hotbarSlots[3] = DemoContentCatalog.WrenchItemId;
+            if (!hotbarSlots[4].HasValue)
+                hotbarSlots[4] = DemoContentCatalog.SurfaceBlockId;
         }
 
         private bool TryRaycastWorld(Camera camera, out DemoWorldHit hit)

@@ -118,6 +118,8 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 - 2026-05-06: Updated `AGENTS.md` for faster low-overhead verification/checkpointing: no Unity tests for docs-only work, no full XML/log reads after a clean test exit, no duplicate progress-map-only commits, and no docs-only checkpoint unless requested.
 - 2026-05-04: Cleaned `AGENTS.md` shell and Unity command guidance, including the local Git `sh.exe` fallback and removing `-quit` from Unity `-runTests`.
 
+- 2026-05-08: Implemented Conveyor Belt Pulleys. Added `PULLEY` state to `MIDDLE` belt segments, enabling shaft insertion via right-click interaction. Updated kinetic connection rules and the renderer to use the official `create:block/belt_pulley` partial model. Verified that breaking pulleys drops shafts and that pulleys correctly propagate rotation power.
+
 ## Next Step
 
-Implement the first transported-item belt movement slice on top of `DemoBeltRuntimeResolver` (offset motion, segment-index progression, and simple end-of-belt handoff), then wire one belt-to-funnel interaction pass.
+Implement Cogwheels and Gearboxes to expand kinetic propagation options, allowing for speed changes and axis redirection.

@@ -13,6 +13,7 @@ namespace Constructed.Create
         public static readonly ResourceLocation BeltConnectorItemId = ResourceLocation.Parse("create:belt_connector");
         public static readonly ResourceLocation CreativeCrateBlockId = ResourceLocation.Parse("create:creative_crate");
         public static readonly ResourceLocation BrassFunnelBlockId = ResourceLocation.Parse("create:brass_funnel");
+        public static readonly ResourceLocation WrenchItemId = ResourceLocation.Parse("create:wrench");
         public static readonly ResourceLocation DemoTransferItemId = ResourceLocation.Parse("create:andesite_alloy");
 
         public static readonly StateProperty<Axis> AxisProperty =
@@ -108,8 +109,10 @@ namespace Constructed.Create
         public static DemoContentCatalog Create()
         {
             ItemDefinition demoTransferItem = new ItemDefinition(DemoTransferItemId);
+            ItemDefinition wrench = new ItemDefinition(WrenchItemId);
             Registry<ItemDefinition> items = new Registry<ItemDefinition>(ResourceLocation.Parse("minecraft:item"));
             items.Register(demoTransferItem.Id, demoTransferItem);
+            items.Register(wrench.Id, wrench);
             items.Freeze();
 
             BlockEntityType itemVaultBlockEntityType = ItemVaultBlock.CreateBlockEntityType(items);

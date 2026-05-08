@@ -328,6 +328,7 @@ namespace Constructed.Unity
             yield return Main("models/block/belt_casing/sideways_middle.json");
             yield return Main("models/block/belt_casing/sideways_end.json");
             yield return Main("models/block/belt_casing/sideways_pulley.json");
+            yield return Main("models/block/belt_pulley.json");
             yield return Main("textures/block/belt.png");
             yield return Main("textures/block/belt_offset.png");
             yield return Main("textures/block/belt_diagonal.png");
