@@ -53,13 +53,14 @@ namespace Constructed.Tests
         [Test]
         public void ResolvePrivateAssetPathKeepsManifestFilesUnderPrivateTempRoot()
         {
-            string privateRoot = Path.Combine(Path.GetTempPath(), "Constructed", "PrivateTemp", "Create");
+            string tempProjectRoot = Path.Combine(Path.GetTempPath(), "ConstructedTempProject");
+            string expectedPrivateRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(tempProjectRoot);
 
             foreach (CreatePrivateAssetFileReference file in CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles)
             {
-                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateRoot, file);
+                string privatePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(tempProjectRoot, file);
                 Assert.IsTrue(
-                    CreatePrivateAssetPathResolver.IsPathUnderRoot(privateRoot, privatePath),
+                    CreatePrivateAssetPathResolver.IsPathUnderRoot(expectedPrivateRoot, privatePath),
                     $"Resolved private path escaped root for {file.RepositoryRelativePath}");
             }
         }

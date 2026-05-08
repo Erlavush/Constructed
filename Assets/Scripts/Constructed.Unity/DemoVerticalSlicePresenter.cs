@@ -1723,8 +1723,7 @@ namespace Constructed.Unity
                 return existingTexture;
 
             string projectRoot = GetProjectRoot();
-            string privateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
-            string privateTexturePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(privateAssetRoot, previewTextureFile);
+            string privateTexturePath = CreatePrivateAssetPathResolver.ResolvePrivateAssetPath(projectRoot, previewTextureFile);
             if (File.Exists(privateTexturePath))
             {
                 byte[] data = File.ReadAllBytes(privateTexturePath);
