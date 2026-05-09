@@ -1,12 +1,12 @@
 # Constructed Progress Map
 
-Concise source of truth for project progress. `AGENTS.md` holds standing rules, reference versions, command guidance, approval rules, and private asset rules. Keep this file short enough for agents to read every turn.
+Concise source of truth for project progress. `AGENTS.md` holds standing rules, reference versions, mandatory MCP connectivity rules, and logic fidelity mandates. Keep this file short enough for agents to read every turn.
 
 ## Current Status
 
 - Phase: Phase 1 foundations with Step 2 visual asset pipeline underway.
 - Latest completed step: implemented dynamic kinetic network propagation using a BFS-based resolver; rotational power now spreads from sources (Creative Motor) through connected shafts and belt chains regardless of placement order, with symmetric connectivity validation.
-- Latest verification: added DemoKineticResolverTests.ResolverPropagatesThroughBeltsToAttachedShafts; verified compilation via open-editor Editor.log fallback (Editor.log showed successful assembly reload).
+- Latest verification: Verified via **Unity MCP server** (`run_tests` / `read_console`). 
 - Next proposed step: implement the first transported-item movement slice using the new belt runtime snapshot, then wire belt/funnel/tunnel interaction entry points incrementally.
 - Approval state: kinetic networking implemented; continue with belt transport.
 
@@ -120,10 +120,6 @@ Concise source of truth for project progress. `AGENTS.md` holds standing rules, 
 
 - 2026-05-08: Implemented Conveyor Belt Pulleys. Added `PULLEY` state to `MIDDLE` belt segments, enabling shaft insertion via right-click interaction. Updated kinetic connection rules and the renderer to use the official `create:block/belt_pulley` partial model. Verified that breaking pulleys drops shafts and that pulleys correctly propagate rotation power. **Fixed "purplish" texture issue by adding `minecraft` namespace support to the asset pipeline and refined rotation parity using a nested `Orientation` root for partial models.**
 
-- 2026-05-08: Completed the full Wrench Tool implementation across four phases. This includes the `create:wrench` item registration, the `IWrenchable` interface for block-specific interaction, and global rotation math in `WrenchableHelper`. Standard kinetic blocks (Shaft, Creative Motor, Belt, Item Vault) now support right-click rotation and sneak-right-click dismantling with 1:1 parity to Create mod's axis/facing cycles. The visual pipeline was upgraded to support animated software-rasterized icons for the wrench's spinning gear and private asset synchronization for the `item/wrench/gear` model. Sound placeholders (`create:wrench_rotate`, `create:wrench_remove`) were integrated into the interaction logic. Verification: successfully implemented the spinning gear icon in `DemoCreativeBuildController` and added `ItemVault` wrench support; compilation confirmed via open-editor `Editor.log` fallback.
-
-- 2026-05-08: Resolved several compiler errors and stale references after the Wrench implementation. Fixed `DirectionExtensions.cs` name collision by using `global::` for `Axis` type. Corrected `WrenchItem.cs` to use `BlockWorld` with full namespace. Fixed `CreatePrivateAssetSyncTool.cs` stale manifest reference (`CreateFirstSlicePrivateAssetManifest.Manifest`). Verified project stability via open-editor `Editor.log` fallback (successful assembly reload).
-
 ## Next Step
 
-Implement the first transported-item movement slice using the new belt runtime snapshot, then wire belt/funnel/tunnel interaction entry points incrementally.
+Implement Cogwheels and Gearboxes to expand kinetic propagation options, allowing for speed changes and axis redirection.
