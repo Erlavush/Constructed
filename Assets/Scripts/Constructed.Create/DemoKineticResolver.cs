@@ -253,9 +253,11 @@ namespace Constructed.Create
 
         public static float ConvertToDirectedSpeed(float axisSpeed, Direction direction)
         {
+            // Consistent global rotation sign: positive axis directions get positive speed,
+            // negative axis directions get negative speed. This ensures that all connected
+            // components along the same axis rotate in the same direction in global space.
             return direction.AxisDirection() == AxisDirection.Positive ? axisSpeed : -axisSpeed;
         }
-
         public static float ConvertToDegreesPerSecond(float speed)
         {
             return speed * DegreesPerSecondPerSpeedUnit;

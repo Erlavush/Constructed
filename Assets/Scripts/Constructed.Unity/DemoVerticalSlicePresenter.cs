@@ -596,7 +596,7 @@ namespace Constructed.Unity
             ResourceLocation pulleyModelId = ResourceLocation.Parse("create:block/belt_pulley");
             Transform spinRoot = CreateChildRoot(root, "Pulley Shaft Spin");
             Transform orientationRoot = CreateChildRoot(spinRoot, "Orientation");
-            
+
             // Align the orientation root with the rotation axis
             // The pulley model is Y-aligned by default.
             orientationRoot.localRotation = GetRotationToAxis(runtimeState.RotationAxis);
@@ -921,6 +921,14 @@ namespace Constructed.Unity
                 return false;
             }
 
+            // Apply the 180-degree visual-only rotation to correct the body model orientation
+            // without touching the kinetic shaft or mechanics.
+            Transform bodyModel = motorRoot.transform.Find("Model");
+            if (bodyModel != null)
+            {
+                bodyModel.localRotation *= Quaternion.Euler(0, 180, 0);
+            }
+
             if (!TryCreateCreativeMotorHalfShaft(
                     motorRoot.transform,
                     facing,
@@ -1000,11 +1008,16 @@ namespace Constructed.Unity
                     return false;
                 }
 
+                // For the half-shaft, we rotate around the local forward (Z) axis.
+                // However, to stay in sync with the global "Absolute" rotation of regular shafts,
+                // we must flip the local speed if the facing direction is negative.
+                float visualSpeed = (facing.AxisDirection() == AxisDirection.Positive) ? shaftSpeed : -shaftSpeed;
+
                 rotatingVisuals.Add(
                     new RotatingVisualState(
                         spinRoot,
                         Vector3.forward,
-                        DemoKineticResolver.ConvertToDegreesPerSecond(shaftSpeed),
+                        DemoKineticResolver.ConvertToDegreesPerSecond(visualSpeed),
                         shaftAngleOffset));
 
                 return true;
