@@ -69,6 +69,91 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void ResolverReversesSpeedAcrossSideMeshedSmallCogwheels()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            BlockPos motorPos = new BlockPos(0, DemoVerticalSliceBootstrap.MachineY, 0);
+            BlockPos drivingCogPos = motorPos.Relative(Direction.East);
+            BlockPos drivenCogPos = drivingCogPos.Relative(Direction.South);
+
+            world.SetBlockState(
+                motorPos,
+                catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+            world.SetBlockState(
+                drivingCogPos,
+                catalog.Cogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+            world.SetBlockState(
+                drivenCogPos,
+                catalog.Cogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+
+            DemoKineticSnapshot snapshot = DemoKineticResolver.Resolve(world, catalog);
+
+            Assert.AreEqual(3, snapshot.Count);
+            AssertKineticState(snapshot, motorPos, Axis.X, 16f);
+            AssertKineticState(snapshot, drivingCogPos, Axis.X, 16f);
+            AssertKineticState(snapshot, drivenCogPos, Axis.X, -16f);
+        }
+
+        [Test]
+        public void ResolverAppliesLargeToSmallCogwheelRatio()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            BlockPos motorPos = new BlockPos(0, DemoVerticalSliceBootstrap.MachineY, 0);
+            BlockPos largeCogPos = motorPos.Relative(Direction.East);
+            BlockPos smallCogPos = largeCogPos.Relative(Direction.Up).Relative(Direction.South);
+
+            world.SetBlockState(
+                motorPos,
+                catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+            world.SetBlockState(
+                largeCogPos,
+                catalog.LargeCogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+            world.SetBlockState(
+                smallCogPos,
+                catalog.Cogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+
+            DemoKineticSnapshot snapshot = DemoKineticResolver.Resolve(world, catalog);
+
+            Assert.AreEqual(3, snapshot.Count);
+            AssertKineticState(snapshot, motorPos, Axis.X, 16f);
+            AssertKineticState(snapshot, largeCogPos, Axis.X, 16f);
+            AssertKineticState(snapshot, smallCogPos, Axis.X, -32f);
+        }
+
+        [Test]
+        public void ResolverRedirectsGearboxSpeedUsingSourceFacingAxisModifier()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            BlockPos motorPos = new BlockPos(0, DemoVerticalSliceBootstrap.MachineY, 0);
+            BlockPos gearboxPos = motorPos.Relative(Direction.East);
+            BlockPos outputShaftPos = gearboxPos.Relative(Direction.North);
+
+            world.SetBlockState(
+                motorPos,
+                catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+            world.SetBlockState(
+                gearboxPos,
+                catalog.Gearbox.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Y));
+            world.SetBlockState(
+                outputShaftPos,
+                catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Z));
+
+            DemoKineticSnapshot snapshot = DemoKineticResolver.Resolve(world, catalog);
+
+            Assert.AreEqual(3, snapshot.Count);
+            AssertKineticState(snapshot, motorPos, Axis.X, 16f);
+            AssertKineticState(snapshot, gearboxPos, Axis.Y, 16f);
+            AssertKineticState(snapshot, outputShaftPos, Axis.Z, -16f);
+            Assert.IsTrue(snapshot.TryGet(gearboxPos, out DemoKineticComponentState gearboxState));
+            Assert.AreEqual(Direction.West, gearboxState.SourceFacing.Value);
+            Assert.AreEqual(-16f, DemoKineticResolver.GetGearboxFaceSpeed(gearboxState, Direction.North), 0.001f);
+            Assert.AreEqual(16f, DemoKineticResolver.GetGearboxFaceSpeed(gearboxState, Direction.South), 0.001f);
+        }
+
+        [Test]
         public void ResolverPropagatesThroughBeltsToAttachedShafts()
         {
             DemoContentCatalog catalog = DemoContentCatalog.Create();

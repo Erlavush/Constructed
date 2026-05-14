@@ -9,6 +9,9 @@ namespace Constructed.Create
         public static readonly ResourceLocation SurfaceBlockId = ResourceLocation.Parse("minecraft:grass_block");
         public static readonly ResourceLocation CreativeMotorBlockId = ResourceLocation.Parse("create:creative_motor");
         public static readonly ResourceLocation ShaftBlockId = ResourceLocation.Parse("create:shaft");
+        public static readonly ResourceLocation CogwheelBlockId = ResourceLocation.Parse("create:cogwheel");
+        public static readonly ResourceLocation LargeCogwheelBlockId = ResourceLocation.Parse("create:large_cogwheel");
+        public static readonly ResourceLocation GearboxBlockId = ResourceLocation.Parse("create:gearbox");
         public static readonly ResourceLocation BeltBlockId = ResourceLocation.Parse("create:belt");
         public static readonly ResourceLocation BeltConnectorItemId = ResourceLocation.Parse("create:belt_connector");
         public static readonly ResourceLocation CreativeCrateBlockId = ResourceLocation.Parse("create:creative_crate");
@@ -17,7 +20,8 @@ namespace Constructed.Create
         public static readonly ResourceLocation DemoTransferItemId = ResourceLocation.Parse("create:andesite_alloy");
 
         public static readonly StateProperty<Axis> AxisProperty =
-            new StateProperty<Axis>("axis", new[] { Axis.X, Axis.Y, Axis.Z }, Axis.X);
+            new StateProperty<Axis>("axis", new[] { Axis.X, Axis.Y, Axis.Z }, Axis.Y);
+        public static readonly StateProperty<bool> WaterloggedProperty = StateProperty<bool>.Bool("waterlogged", false);
         public static readonly StateProperty<Direction> FacingProperty =
             new StateProperty<Direction>(
                 "facing",
@@ -52,7 +56,7 @@ namespace Constructed.Create
                 },
                 DemoBeltPart.Start);
         public static readonly StateProperty<bool> BeltCasingProperty = StateProperty<bool>.Bool("casing", false);
-        public static readonly StateProperty<bool> BeltWaterloggedProperty = StateProperty<bool>.Bool("waterlogged", false);
+        public static readonly StateProperty<bool> BeltWaterloggedProperty = WaterloggedProperty;
 
         private DemoContentCatalog(
             Registry<ItemDefinition> items,
@@ -63,6 +67,9 @@ namespace Constructed.Create
             BlockDefinition surface,
             BlockDefinition creativeMotor,
             BlockDefinition shaft,
+            BlockDefinition cogwheel,
+            BlockDefinition largeCogwheel,
+            BlockDefinition gearbox,
             BlockDefinition belt,
             BlockDefinition creativeCrate,
             BlockDefinition brassFunnel,
@@ -77,6 +84,9 @@ namespace Constructed.Create
             Surface = surface;
             CreativeMotor = creativeMotor;
             Shaft = shaft;
+            Cogwheel = cogwheel;
+            LargeCogwheel = largeCogwheel;
+            Gearbox = gearbox;
             Belt = belt;
             CreativeCrate = creativeCrate;
             BrassFunnel = brassFunnel;
@@ -99,6 +109,12 @@ namespace Constructed.Create
         public BlockDefinition CreativeMotor { get; }
 
         public BlockDefinition Shaft { get; }
+
+        public BlockDefinition Cogwheel { get; }
+
+        public BlockDefinition LargeCogwheel { get; }
+
+        public BlockDefinition Gearbox { get; }
 
         public BlockDefinition Belt { get; }
 
@@ -124,6 +140,9 @@ namespace Constructed.Create
             BlockDefinition surface = new BlockDefinition(SurfaceBlockId);
             BlockDefinition creativeMotor = new CreativeMotorBlock(CreativeMotorBlockId, new IStateProperty[] { FacingProperty });
             BlockDefinition shaft = new ShaftBlock(ShaftBlockId, new IStateProperty[] { AxisProperty });
+            BlockDefinition cogwheel = new CogWheelBlock(CogwheelBlockId, new IStateProperty[] { AxisProperty }, false);
+            BlockDefinition largeCogwheel = new CogWheelBlock(LargeCogwheelBlockId, new IStateProperty[] { AxisProperty }, true);
+            BlockDefinition gearbox = new GearboxBlock(GearboxBlockId, new IStateProperty[] { AxisProperty });
 
             BeltBlockLifecycle beltLifecycle = new BeltBlockLifecycle();
             BlockDefinition belt = new BeltBlock(
@@ -146,6 +165,9 @@ namespace Constructed.Create
             blocks.Register(surface.Id, surface);
             blocks.Register(creativeMotor.Id, creativeMotor);
             blocks.Register(shaft.Id, shaft);
+            blocks.Register(cogwheel.Id, cogwheel);
+            blocks.Register(largeCogwheel.Id, largeCogwheel);
+            blocks.Register(gearbox.Id, gearbox);
             blocks.Register(belt.Id, belt);
             blocks.Register(creativeCrate.Id, creativeCrate);
             blocks.Register(brassFunnel.Id, brassFunnel);
@@ -161,6 +183,9 @@ namespace Constructed.Create
                 surface,
                 creativeMotor,
                 shaft,
+                cogwheel,
+                largeCogwheel,
+                gearbox,
                 belt,
                 creativeCrate,
                 brassFunnel,

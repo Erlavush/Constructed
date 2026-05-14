@@ -43,10 +43,14 @@ namespace Constructed.Unity
             Entry("create:andesite_alloy", "Andesite Alloy", "textures/item/andesite_alloy.png"),
             Entry("create:belt_connector", "Belt Connector", "textures/item/belt_connector.png"),
             Entry("create:shaft", "Shaft", "textures/block/axis_top.png"),
+            Entry("create:cogwheel", "Cogwheel", "textures/block/cogwheel.png"),
+            Entry("create:large_cogwheel", "Large Cogwheel", "textures/block/large_cogwheel.png"),
+            Entry("create:gearbox", "Gearbox", "textures/block/gearbox.png"),
             Entry("create:creative_motor", "Creative Motor", "textures/block/creative_motor.png"),
             Entry("create:creative_crate", "Creative Crate", "textures/block/crate_creative.png"),
             Entry("create:brass_funnel", "Brass Funnel", "textures/block/funnel/brass_funnel.png"),
-            Entry("create:item_vault", "Item Vault", "textures/block/vault/vault_front_small.png")
+            Entry("create:item_vault", "Item Vault", "textures/block/vault/vault_front_small.png"),
+            Entry("create:wrench", "Wrench", "textures/item/wrench.png")
         };
 
         private static readonly Dictionary<ResourceLocation, CreateItemVisualCatalogEntry> entriesById = BuildEntriesById();

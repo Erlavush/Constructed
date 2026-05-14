@@ -9,7 +9,7 @@ namespace Constructed.Tests
         [Test]
         public void ItemCatalogContainsExpectedFirstSliceEntriesInPreviewOrder()
         {
-            Assert.AreEqual(7, CreateFirstSliceItemVisualCatalog.Entries.Count);
+            Assert.AreEqual(11, CreateFirstSliceItemVisualCatalog.Entries.Count);
 
             CollectionAssert.AreEqual(
                 CreateFirstSlicePrivateAssetManifest.ItemCatalogIds,

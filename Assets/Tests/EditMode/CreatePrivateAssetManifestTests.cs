@@ -15,7 +15,7 @@ namespace Constructed.Tests
         {
             CreatePrivateAssetManifest manifest = CreateFirstSlicePrivateAssetManifest.Manifest;
 
-            Assert.AreEqual(13, manifest.Targets.Count);
+            Assert.AreEqual(20, manifest.Targets.Count);
 
             CollectionAssert.AreEquivalent(
                 CreateFirstSlicePrivateAssetManifest.ItemCatalogIds,
@@ -35,17 +35,25 @@ namespace Constructed.Tests
 
             CreateVisualAssetTarget creativeMotorBlock = manifest.GetTarget(ResourceLocation.Parse("create:creative_motor"), CreateVisualAssetKind.Block);
             Assert.IsTrue(ContainsPath(creativeMotorBlock, "src/main/resources/assets/create/models/block/shaft_half.json"));
+
+            CreateVisualAssetTarget cogwheelBlock = manifest.GetTarget(ResourceLocation.Parse("create:cogwheel"), CreateVisualAssetKind.Block);
+            Assert.IsTrue(ContainsPath(cogwheelBlock, "src/generated/resources/assets/create/blockstates/cogwheel.json"));
+            Assert.IsTrue(ContainsPath(cogwheelBlock, "src/main/resources/assets/create/models/block/cogwheel_shaftless.json"));
+            Assert.IsTrue(ContainsPath(cogwheelBlock, "assets/minecraft/textures/block/stripped_spruce_log_top.png"));
+
+            CreateVisualAssetTarget gearboxBlock = manifest.GetTarget(ResourceLocation.Parse("create:gearbox"), CreateVisualAssetKind.Block);
+            Assert.IsTrue(ContainsPath(gearboxBlock, "src/generated/resources/assets/create/blockstates/gearbox.json"));
+            Assert.IsTrue(ContainsPath(gearboxBlock, "src/main/resources/assets/create/models/block/gearbox/block.json"));
+            Assert.IsTrue(ContainsPath(gearboxBlock, "src/main/resources/assets/create/models/block/shaft_half.json"));
         }
 
         [Test]
         public void FirstSliceManifestPathsExistInReferenceCheckout()
         {
             string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            string referenceRoot = Path.Combine(projectRoot, "References", "Create-mc1.21.1-dev");
-
             foreach (CreatePrivateAssetFileReference file in CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles)
             {
-                string sourcePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceRoot, file);
+                string sourcePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(projectRoot, file);
                 Assert.IsTrue(File.Exists(sourcePath), $"Missing manifest source file: {file.RepositoryRelativePath}");
             }
         }

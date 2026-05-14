@@ -78,6 +78,49 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void CreatePlacementStateBuildsCogwheelFromCompatibleNeighborAxis()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+            BlockPos shaftPosition = new BlockPos(4, DemoVerticalSliceBootstrap.MachineY, 4);
+            BlockPos cogPosition = shaftPosition.Relative(Direction.East);
+            world.SetBlockState(
+                shaftPosition,
+                catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+
+            Assert.IsTrue(DemoKineticPlacementRules.IsPlaceableBlock(catalog, catalog.Cogwheel.Id));
+            Assert.IsTrue(DemoKineticPlacementRules.IsPlaceableBlock(catalog, catalog.LargeCogwheel.Id));
+            Assert.IsTrue(DemoKineticPlacementRules.IsPlaceableBlock(catalog, catalog.Gearbox.Id));
+
+            BlockState placementState = DemoKineticPlacementRules.CreatePlacementState(
+                catalog,
+                world,
+                catalog.Cogwheel.Id,
+                cogPosition,
+                Direction.Up);
+
+            Assert.AreEqual(catalog.Cogwheel.Id, placementState.Definition.Id);
+            Assert.AreEqual(Axis.X, placementState.Get(DemoContentCatalog.AxisProperty));
+        }
+
+        [Test]
+        public void CreatePlacementStateBuildsGearboxWithSourcePlacementAxisDefault()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+            BlockWorld world = DemoVerticalSliceBootstrap.CreateFlatSurfaceWorld(catalog);
+
+            BlockState placementState = DemoKineticPlacementRules.CreatePlacementState(
+                catalog,
+                world,
+                catalog.Gearbox.Id,
+                new BlockPos(4, DemoVerticalSliceBootstrap.MachineY, 4),
+                Direction.North);
+
+            Assert.AreEqual(catalog.Gearbox.Id, placementState.Definition.Id);
+            Assert.AreEqual(Axis.Y, placementState.Get(DemoContentCatalog.AxisProperty));
+        }
+
+        [Test]
         public void CreatePlacementStateBuildsDefaultGrassBlock()
         {
             DemoContentCatalog catalog = DemoContentCatalog.Create();

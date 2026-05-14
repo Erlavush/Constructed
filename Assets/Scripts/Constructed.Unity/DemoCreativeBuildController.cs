@@ -660,6 +660,9 @@ namespace Constructed.Unity
             {
                 bool placeable = entry.ItemId == DemoContentCatalog.CreativeMotorBlockId ||
                     entry.ItemId == DemoContentCatalog.ShaftBlockId ||
+                    entry.ItemId == DemoContentCatalog.CogwheelBlockId ||
+                    entry.ItemId == DemoContentCatalog.LargeCogwheelBlockId ||
+                    entry.ItemId == DemoContentCatalog.GearboxBlockId ||
                     entry.ItemId == DemoContentCatalog.BeltConnectorItemId ||
                     entry.ItemId == WrenchItem.WrenchItemId;
                 BuildInventoryEntry inventoryEntry = new BuildInventoryEntry(
@@ -689,11 +692,17 @@ namespace Constructed.Unity
             if (!hotbarSlots[1].HasValue)
                 hotbarSlots[1] = DemoContentCatalog.ShaftBlockId;
             if (!hotbarSlots[2].HasValue)
-                hotbarSlots[2] = DemoContentCatalog.BeltConnectorItemId;
+                hotbarSlots[2] = DemoContentCatalog.CogwheelBlockId;
             if (!hotbarSlots[3].HasValue)
-                hotbarSlots[3] = DemoContentCatalog.WrenchItemId;
+                hotbarSlots[3] = DemoContentCatalog.LargeCogwheelBlockId;
             if (!hotbarSlots[4].HasValue)
-                hotbarSlots[4] = DemoContentCatalog.SurfaceBlockId;
+                hotbarSlots[4] = DemoContentCatalog.GearboxBlockId;
+            if (!hotbarSlots[5].HasValue)
+                hotbarSlots[5] = DemoContentCatalog.BeltConnectorItemId;
+            if (!hotbarSlots[6].HasValue)
+                hotbarSlots[6] = DemoContentCatalog.WrenchItemId;
+            if (!hotbarSlots[7].HasValue)
+                hotbarSlots[7] = DemoContentCatalog.SurfaceBlockId;
         }
 
         private bool TryRaycastWorld(Camera camera, out DemoWorldHit hit)
@@ -1000,6 +1009,7 @@ namespace Constructed.Unity
             private static readonly Vector3 MinecraftGuiFlatLight0 = new Vector3(-0.222518995f, -0.171498626f, 0.959725678f);
             private static readonly Vector3 MinecraftGuiFlatLight1 = new Vector3(-0.215012133f, -0.971825242f, 0.096567802f);
 
+            private readonly string projectRoot;
             private readonly string privateCreateAssetRoot;
             private readonly string referenceCreateAssetRoot;
             private readonly string minecraftAssetRoot;
@@ -1019,6 +1029,7 @@ namespace Constructed.Unity
                 if (string.IsNullOrWhiteSpace(projectRoot))
                     throw new ArgumentException("Project root cannot be empty.", nameof(projectRoot));
 
+                this.projectRoot = projectRoot;
                 privateCreateAssetRoot = CreatePrivateAssetProjectPaths.GetPrivateCreateAssetRoot(projectRoot);
                 referenceCreateAssetRoot = CreatePrivateAssetProjectPaths.GetReferenceRepositoryRoot(projectRoot);
                 minecraftAssetRoot = Path.Combine(projectRoot, MinecraftAssetRootRelativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -1293,7 +1304,7 @@ namespace Constructed.Unity
                     if (File.Exists(privatePath))
                         return privatePath;
 
-                    string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceCreateAssetRoot, file);
+                    string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(projectRoot, file);
                     return File.Exists(referencePath) ? referencePath : null;
                 }
 
@@ -1340,7 +1351,7 @@ namespace Constructed.Unity
                 if (File.Exists(privatePath))
                     return LoadTextureFromPath(privatePath);
 
-                string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(referenceCreateAssetRoot, fallbackIconFile);
+                string referencePath = CreatePrivateAssetPathResolver.ResolveReferenceSourcePath(projectRoot, fallbackIconFile);
                 return File.Exists(referencePath) ? LoadTextureFromPath(referencePath) : GetMissingTexture();
             }
 

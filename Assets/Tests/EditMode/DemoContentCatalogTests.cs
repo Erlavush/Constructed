@@ -14,13 +14,17 @@ namespace Constructed.Tests
 
             Assert.IsTrue(catalog.Items.IsFrozen);
             Assert.IsTrue(catalog.Blocks.IsFrozen);
-            Assert.AreEqual(1, catalog.Items.Count);
-            Assert.AreEqual(8, catalog.Blocks.Count);
+            Assert.AreEqual(2, catalog.Items.Count);
+            Assert.AreEqual(11, catalog.Blocks.Count);
             Assert.AreEqual(ResourceLocation.Parse("create:andesite_alloy"), catalog.DemoTransferItem.Id);
+            Assert.AreEqual(ResourceLocation.Parse("create:wrench"), catalog.Wrench.Id);
             Assert.AreEqual(ResourceLocation.Parse("minecraft:air"), catalog.Air.Id);
             Assert.AreEqual(ResourceLocation.Parse("minecraft:grass_block"), catalog.Surface.Id);
             Assert.AreEqual(ResourceLocation.Parse("create:creative_motor"), catalog.CreativeMotor.Id);
             Assert.AreEqual(ResourceLocation.Parse("create:shaft"), catalog.Shaft.Id);
+            Assert.AreEqual(ResourceLocation.Parse("create:cogwheel"), catalog.Cogwheel.Id);
+            Assert.AreEqual(ResourceLocation.Parse("create:large_cogwheel"), catalog.LargeCogwheel.Id);
+            Assert.AreEqual(ResourceLocation.Parse("create:gearbox"), catalog.Gearbox.Id);
             Assert.AreEqual(ResourceLocation.Parse("create:belt"), catalog.Belt.Id);
             Assert.AreEqual(ResourceLocation.Parse("create:creative_crate"), catalog.CreativeCrate.Id);
             Assert.AreEqual(ResourceLocation.Parse("create:brass_funnel"), catalog.BrassFunnel.Id);
@@ -33,7 +37,10 @@ namespace Constructed.Tests
             DemoContentCatalog catalog = DemoContentCatalog.Create();
 
             Assert.AreEqual(Direction.East, catalog.CreativeMotor.DefaultState.Get(DemoContentCatalog.FacingProperty));
-            Assert.AreEqual(Axis.X, catalog.Shaft.DefaultState.Get(DemoContentCatalog.AxisProperty));
+            Assert.AreEqual(Axis.Y, catalog.Shaft.DefaultState.Get(DemoContentCatalog.AxisProperty));
+            Assert.AreEqual(Axis.Y, catalog.Cogwheel.DefaultState.Get(DemoContentCatalog.AxisProperty));
+            Assert.AreEqual(Axis.Y, catalog.LargeCogwheel.DefaultState.Get(DemoContentCatalog.AxisProperty));
+            Assert.AreEqual(Axis.Y, catalog.Gearbox.DefaultState.Get(DemoContentCatalog.AxisProperty));
             Assert.AreEqual(Direction.North, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltFacingProperty));
             Assert.AreEqual(DemoBeltSlope.Horizontal, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltSlopeProperty));
             Assert.AreEqual(DemoBeltPart.Start, catalog.Belt.DefaultState.Get(DemoContentCatalog.BeltPartProperty));

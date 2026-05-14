@@ -8,6 +8,9 @@ namespace Constructed.Unity
     public static class CreateFirstSliceWorldBlockVisualStateBridge
     {
         private static readonly ResourceLocation ShaftId = ResourceLocation.Parse("create:shaft");
+        private static readonly ResourceLocation CogwheelId = ResourceLocation.Parse("create:cogwheel");
+        private static readonly ResourceLocation LargeCogwheelId = ResourceLocation.Parse("create:large_cogwheel");
+        private static readonly ResourceLocation GearboxId = ResourceLocation.Parse("create:gearbox");
         private static readonly ResourceLocation CreativeMotorId = ResourceLocation.Parse("create:creative_motor");
         private static readonly ResourceLocation BeltId = ResourceLocation.Parse("create:belt");
         private static readonly ResourceLocation CreativeCrateId = ResourceLocation.Parse("create:creative_crate");
@@ -20,7 +23,7 @@ namespace Constructed.Unity
                 throw new ArgumentNullException(nameof(state));
 
             ResourceLocation blockId = state.Definition.Id;
-            if (blockId == ShaftId)
+            if (blockId == ShaftId || blockId == CogwheelId || blockId == LargeCogwheelId || blockId == GearboxId)
             {
                 visualProperties = new[]
                 {

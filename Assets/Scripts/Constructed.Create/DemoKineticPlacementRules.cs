@@ -23,6 +23,9 @@ namespace Constructed.Create
 
             return blockId == catalog.CreativeMotor.Id ||
                 blockId == catalog.Shaft.Id ||
+                blockId == catalog.Cogwheel.Id ||
+                blockId == catalog.LargeCogwheel.Id ||
+                blockId == catalog.Gearbox.Id ||
                 blockId == catalog.Surface.Id;
         }
 
@@ -49,6 +52,21 @@ namespace Constructed.Create
                 Axis axis = ResolveShaftAxis(catalog, world, position, nearestLookingDirection);
                 return catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, axis);
             }
+
+            if (blockId == catalog.Cogwheel.Id)
+            {
+                Axis axis = ResolveCogwheelAxis(catalog, world, position, nearestLookingDirection, false);
+                return catalog.Cogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, axis);
+            }
+
+            if (blockId == catalog.LargeCogwheel.Id)
+            {
+                Axis axis = ResolveCogwheelAxis(catalog, world, position, nearestLookingDirection, true);
+                return catalog.LargeCogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, axis);
+            }
+
+            if (blockId == catalog.Gearbox.Id)
+                return catalog.Gearbox.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Y);
 
             if (blockId == catalog.Surface.Id)
                 return catalog.Surface.DefaultState;
@@ -86,6 +104,35 @@ namespace Constructed.Create
             return preferredAxis ?? nearestLookingDirection.Axis();
         }
 
+        public static Axis ResolveCogwheelAxis(
+            DemoContentCatalog catalog,
+            BlockWorld world,
+            BlockPos position,
+            Direction nearestLookingDirection,
+            bool large)
+        {
+            if (catalog == null)
+                throw new ArgumentNullException(nameof(catalog));
+            if (world == null)
+                throw new ArgumentNullException(nameof(world));
+
+            Axis? preferredAxis = GetPreferredAxis(catalog, world, position);
+            if (preferredAxis.HasValue && CogWheelBlock.IsValidCogwheelPosition(large, catalog, world, position, preferredAxis.Value))
+                return preferredAxis.Value;
+
+            Axis lookAxis = nearestLookingDirection.Axis();
+            if (CogWheelBlock.IsValidCogwheelPosition(large, catalog, world, position, lookAxis))
+                return lookAxis;
+
+            foreach (Axis axis in new[] { Axis.X, Axis.Y, Axis.Z })
+            {
+                if (CogWheelBlock.IsValidCogwheelPosition(large, catalog, world, position, axis))
+                    return axis;
+            }
+
+            throw new InvalidOperationException($"No valid {(large ? "large " : string.Empty)}cogwheel axis exists at {position}.");
+        }
+
         public static bool HasShaftTowards(DemoContentCatalog catalog, BlockWorld world, BlockPos position, Direction face)
         {
             if (catalog == null)
@@ -106,6 +153,10 @@ namespace Constructed.Create
             ResourceLocation id = state.Definition.Id;
             if (id == catalog.Shaft.Id)
                 return state.Get(DemoContentCatalog.AxisProperty) == face.Axis();
+            if (id == catalog.Cogwheel.Id || id == catalog.LargeCogwheel.Id)
+                return state.Get(DemoContentCatalog.AxisProperty) == face.Axis();
+            if (id == catalog.Gearbox.Id)
+                return state.Get(DemoContentCatalog.AxisProperty) != face.Axis();
             if (id == catalog.CreativeMotor.Id)
                 return state.Get(DemoContentCatalog.FacingProperty) == face;
 

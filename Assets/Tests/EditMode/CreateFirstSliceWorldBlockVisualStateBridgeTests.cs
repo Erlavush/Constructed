@@ -25,6 +25,33 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void BridgeSerializesCogwheelAndGearboxAxisFromRuntimeState()
+        {
+            DemoContentCatalog catalog = DemoContentCatalog.Create();
+
+            AssertBridgeProperties(
+                catalog.Cogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Y),
+                new[]
+                {
+                    new BlockStatePropertyValue("axis", "y")
+                });
+
+            AssertBridgeProperties(
+                catalog.LargeCogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Z),
+                new[]
+                {
+                    new BlockStatePropertyValue("axis", "z")
+                });
+
+            AssertBridgeProperties(
+                catalog.Gearbox.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X),
+                new[]
+                {
+                    new BlockStatePropertyValue("axis", "x")
+                });
+        }
+
+        [Test]
         public void BridgeSerializesFacingBasedBlocksFromRuntimeState()
         {
             DemoContentCatalog catalog = DemoContentCatalog.Create();

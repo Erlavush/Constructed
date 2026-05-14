@@ -10,12 +10,15 @@ namespace Constructed.Tests
         [Test]
         public void BlockCatalogContainsExpectedFirstSliceEntriesInPreviewOrder()
         {
-            Assert.AreEqual(5, CreateFirstSliceBlockVisualCatalog.Entries.Count);
+            Assert.AreEqual(8, CreateFirstSliceBlockVisualCatalog.Entries.Count);
 
             CollectionAssert.AreEqual(
                 new[]
                 {
                     ResourceLocation.Parse("create:shaft"),
+                    ResourceLocation.Parse("create:cogwheel"),
+                    ResourceLocation.Parse("create:large_cogwheel"),
+                    ResourceLocation.Parse("create:gearbox"),
                     ResourceLocation.Parse("create:creative_motor"),
                     ResourceLocation.Parse("create:creative_crate"),
                     ResourceLocation.Parse("create:brass_funnel"),
@@ -37,16 +40,37 @@ namespace Constructed.Tests
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    new BlockStatePropertyValue("facing", "east")
+                    new BlockStatePropertyValue("axis", "y")
                 },
                 CreateFirstSliceBlockVisualCatalog.Entries[1].PreviewProperties);
 
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    new BlockStatePropertyValue("facing", "down")
+                    new BlockStatePropertyValue("axis", "y")
                 },
                 CreateFirstSliceBlockVisualCatalog.Entries[2].PreviewProperties);
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new BlockStatePropertyValue("axis", "y")
+                },
+                CreateFirstSliceBlockVisualCatalog.Entries[3].PreviewProperties);
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new BlockStatePropertyValue("facing", "east")
+                },
+                CreateFirstSliceBlockVisualCatalog.Entries[4].PreviewProperties);
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new BlockStatePropertyValue("facing", "down")
+                },
+                CreateFirstSliceBlockVisualCatalog.Entries[5].PreviewProperties);
 
             CollectionAssert.AreEqual(
                 new[]
@@ -56,7 +80,7 @@ namespace Constructed.Tests
                     new BlockStatePropertyValue("powered", "false"),
                     new BlockStatePropertyValue("waterlogged", "false")
                 },
-                CreateFirstSliceBlockVisualCatalog.Entries[3].PreviewProperties);
+                CreateFirstSliceBlockVisualCatalog.Entries[6].PreviewProperties);
 
             CollectionAssert.AreEqual(
                 new[]
@@ -64,7 +88,7 @@ namespace Constructed.Tests
                     new BlockStatePropertyValue("axis", "x"),
                     new BlockStatePropertyValue("large", "false")
                 },
-                CreateFirstSliceBlockVisualCatalog.Entries[4].PreviewProperties);
+                CreateFirstSliceBlockVisualCatalog.Entries[7].PreviewProperties);
         }
 
         private static ResourceLocation[] GetBlockIds()

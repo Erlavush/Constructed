@@ -42,6 +42,8 @@ namespace Constructed.Unity
             new MinecraftModelDisplayTransform(new Vector3(30f, 225f, 0f), Vector3.zero, new Vector3(0.8f, 0.8f, 0.8f));
         private static readonly Color32 DefaultMinecraftGrassTint = new Color32(124, 189, 107, 255);
         private static readonly ResourceLocation CreativeMotorHalfShaftModelId = ResourceLocation.Parse("create:block/shaft_half");
+        private static readonly ResourceLocation LargeCogwheelShaftlessModelId = ResourceLocation.Parse("create:block/large_cogwheel_shaftless");
+        private static readonly ResourceLocation CogwheelShaftModelId = ResourceLocation.Parse("create:block/cogwheel_shaft");
         private static readonly ResourceLocation BeltTopTextureId = ResourceLocation.Parse("create:block/belt");
         private static readonly ResourceLocation BeltBottomTextureId = ResourceLocation.Parse("create:block/belt_offset");
         private static readonly ResourceLocation BeltDiagonalTextureId = ResourceLocation.Parse("create:block/belt_diagonal");
@@ -95,6 +97,10 @@ namespace Constructed.Unity
         public int GeneratedAnimatedMotorOutputCount { get; private set; }
 
         public int GeneratedAnimatedShaftCount { get; private set; }
+
+        public int GeneratedAnimatedCogwheelCount { get; private set; }
+
+        public int GeneratedAnimatedGearboxShaftCount { get; private set; }
 
         public int GeneratedAnimatedBeltSegmentCount { get; private set; }
 
@@ -155,6 +161,8 @@ namespace Constructed.Unity
             CopiedCreateAssetFileCount = 0;
             GeneratedAnimatedMotorOutputCount = 0;
             GeneratedAnimatedShaftCount = 0;
+            GeneratedAnimatedCogwheelCount = 0;
+            GeneratedAnimatedGearboxShaftCount = 0;
             GeneratedAnimatedBeltSegmentCount = 0;
 
             DemoKineticSnapshot kineticSnapshot = DemoKineticResolver.Resolve(runtimeWorld, runtimeCatalog);
@@ -274,6 +282,10 @@ namespace Constructed.Unity
                 return TryCreateCreativeMotorWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
             if (entry.State.Definition.Id == catalog.Shaft.Id)
                 return TryCreateShaftWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
+            if (entry.State.Definition.Id == catalog.Cogwheel.Id || entry.State.Definition.Id == catalog.LargeCogwheel.Id)
+                return TryCreateCogwheelWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
+            if (entry.State.Definition.Id == catalog.Gearbox.Id)
+                return TryCreateGearboxWorldBlock(root, catalog, entry, kineticSnapshot, modelLoader, blockStateLoader);
             if (entry.State.Definition.Id == catalog.Belt.Id)
                 return TryCreateBeltWorldBlock(root, catalog, entry, beltSnapshot, modelLoader, blockStateLoader);
 
@@ -447,6 +459,216 @@ namespace Constructed.Unity
 
             AddMeshColliders(blockRoot);
             return true;
+        }
+
+        private bool TryCreateCogwheelWorldBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            DemoKineticSnapshot kineticSnapshot,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
+                return false;
+
+            GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.hideFlags = HideFlags.DontSave;
+            blockRoot.transform.SetParent(root, false);
+            blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
+
+            bool isLarge = entry.State.Definition.Id == catalog.LargeCogwheel.Id;
+            DemoKineticComponentState kineticState = default;
+            bool hasKineticState = kineticSnapshot != null && kineticSnapshot.TryGet(entry.Position, out kineticState);
+            Axis axis = entry.State.Get(DemoContentCatalog.AxisProperty);
+
+            if (!hasKineticState)
+            {
+                if (!TryCreateCombinedBlockModel(
+                        blockRoot.transform,
+                        entry.State.Definition.Id,
+                        visualProperties,
+                        WorldBlockModelBaseScale,
+                        modelLoader,
+                        blockStateLoader))
+                {
+                    FailedStateDrivenWorldBlockCount++;
+                    DestroyUnityObject(blockRoot);
+                    return false;
+                }
+
+                AddMeshColliders(blockRoot);
+                return true;
+            }
+
+            if (isLarge)
+            {
+                if (!TryCreateLargeCogwheelAssembly(blockRoot.transform, entry.State.Definition.Id, visualProperties, entry.Position, axis, kineticState, modelLoader, blockStateLoader))
+                {
+                    FailedStateDrivenWorldBlockCount++;
+                    DestroyUnityObject(blockRoot);
+                    return false;
+                }
+            }
+            else
+            {
+                Transform spinRoot = CreateChildRoot(blockRoot.transform, "Cogwheel Spin");
+                if (!TryCreateCombinedBlockModel(
+                        spinRoot,
+                        entry.State.Definition.Id,
+                        visualProperties,
+                        WorldBlockModelBaseScale,
+                        modelLoader,
+                        blockStateLoader))
+                {
+                    FailedStateDrivenWorldBlockCount++;
+                    DestroyUnityObject(blockRoot);
+                    return false;
+                }
+
+                rotatingVisuals.Add(
+                    new RotatingVisualState(
+                        spinRoot,
+                        ToUnityAxisVector(axis),
+                        DemoKineticResolver.ConvertToDegreesPerSecond(kineticState.Speed),
+                        DemoKineticResolver.GetCogwheelRotationOffsetDegrees(entry.Position, axis, false)));
+            }
+
+            GeneratedAnimatedCogwheelCount++;
+            AddMeshColliders(blockRoot);
+            return true;
+        }
+
+        private bool TryCreateLargeCogwheelAssembly(
+            Transform root,
+            ResourceLocation blockId,
+            IReadOnlyList<BlockStatePropertyValue> visualProperties,
+            BlockPos position,
+            Axis axis,
+            DemoKineticComponentState kineticState,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            MinecraftBlockStateVariant variant;
+            try
+            {
+                variant = blockStateLoader.LoadBlockState(blockId).ResolveVariant(visualProperties);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            Transform gearSpinRoot = CreateChildRoot(root, "Large Cogwheel Gear Spin");
+            if (!TryCreatePartialModelWithBlockVariant(gearSpinRoot, LargeCogwheelShaftlessModelId, variant, WorldBlockModelBaseScale, modelLoader))
+                return false;
+
+            rotatingVisuals.Add(
+                new RotatingVisualState(
+                    gearSpinRoot,
+                    ToUnityAxisVector(axis),
+                    DemoKineticResolver.ConvertToDegreesPerSecond(kineticState.Speed),
+                    DemoKineticResolver.GetCogwheelRotationOffsetDegrees(position, axis, true)));
+
+            Transform shaftSpinRoot = CreateChildRoot(root, "Large Cogwheel Shaft Spin");
+            if (!TryCreatePartialModelWithBlockVariant(shaftSpinRoot, CogwheelShaftModelId, variant, WorldBlockModelBaseScale, modelLoader))
+                return false;
+
+            rotatingVisuals.Add(
+                new RotatingVisualState(
+                    shaftSpinRoot,
+                    ToUnityAxisVector(axis),
+                    DemoKineticResolver.ConvertToDegreesPerSecond(kineticState.Speed),
+                    DemoKineticResolver.GetLargeCogwheelShaftRotationOffsetDegrees(position, axis)));
+
+            return true;
+        }
+
+        private bool TryCreateGearboxWorldBlock(
+            Transform root,
+            DemoContentCatalog catalog,
+            WorldBlockEntry entry,
+            DemoKineticSnapshot kineticSnapshot,
+            MinecraftModelLoader modelLoader,
+            MinecraftBlockStateLoader blockStateLoader)
+        {
+            if (!CreateFirstSliceWorldBlockVisualStateBridge.TryResolve(entry.State, out BlockStatePropertyValue[] visualProperties))
+                return false;
+
+            GameObject blockRoot = new GameObject(GetDisplayName(catalog, entry));
+            blockRoot.hideFlags = HideFlags.DontSave;
+            blockRoot.transform.SetParent(root, false);
+            blockRoot.transform.localPosition = ToUnityPosition(entry.Position);
+
+            if (!TryCreateCombinedBlockModel(
+                    blockRoot.transform,
+                    entry.State.Definition.Id,
+                    visualProperties,
+                    WorldBlockModelBaseScale,
+                    modelLoader,
+                    blockStateLoader))
+            {
+                FailedStateDrivenWorldBlockCount++;
+                DestroyUnityObject(blockRoot);
+                return false;
+            }
+
+            if (kineticSnapshot != null && kineticSnapshot.TryGet(entry.Position, out DemoKineticComponentState kineticState))
+            {
+                Axis boxAxis = entry.State.Get(DemoContentCatalog.AxisProperty);
+                foreach (Direction direction in new[] { Direction.Down, Direction.Up, Direction.North, Direction.South, Direction.West, Direction.East })
+                {
+                    if (direction.Axis() == boxAxis)
+                        continue;
+
+                    if (TryCreateGearboxHalfShaft(blockRoot.transform, entry.Position, direction, kineticState, modelLoader))
+                        GeneratedAnimatedGearboxShaftCount++;
+                }
+            }
+
+            AddMeshColliders(blockRoot);
+            return true;
+        }
+
+        private bool TryCreateGearboxHalfShaft(
+            Transform root,
+            BlockPos position,
+            Direction direction,
+            DemoKineticComponentState kineticState,
+            MinecraftModelLoader modelLoader)
+        {
+            try
+            {
+                MinecraftResolvedModel model = modelLoader.LoadModel(CreativeMotorHalfShaftModelId);
+                if (model.Elements.Count == 0)
+                    return false;
+
+                Transform facingRoot = CreateChildRoot(root, "Gearbox Shaft " + direction);
+                facingRoot.localRotation = Quaternion.FromToRotation(Vector3.forward, ToUnityDirectionVector(direction));
+                facingRoot.localScale = Vector3.one * WorldBlockModelBaseScale;
+
+                Transform spinRoot = CreateChildRoot(facingRoot, "Spin");
+                if (!TryCreateCombinedResolvedModel(spinRoot, model))
+                {
+                    DestroyUnityObject(facingRoot.gameObject);
+                    return false;
+                }
+
+                float faceSpeed = DemoKineticResolver.GetGearboxFaceSpeed(kineticState, direction);
+                float visualSpeed = direction.AxisDirection() == AxisDirection.Positive ? faceSpeed : -faceSpeed;
+                rotatingVisuals.Add(
+                    new RotatingVisualState(
+                        spinRoot,
+                        Vector3.forward,
+                        DemoKineticResolver.ConvertToDegreesPerSecond(visualSpeed),
+                        DemoKineticResolver.GetRotationOffsetDegrees(position, direction.Axis())));
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         private bool TryCreateBeltWorldBlock(
@@ -665,6 +887,42 @@ namespace Constructed.Unity
             }
             catch (Exception)
             {
+                return false;
+            }
+        }
+
+        private bool TryCreatePartialModelWithBlockVariant(
+            Transform root,
+            ResourceLocation modelId,
+            MinecraftBlockStateVariant variant,
+            float baseScale,
+            MinecraftModelLoader modelLoader)
+        {
+            if (modelLoader == null || variant == null)
+                return false;
+
+            Transform modelRoot = CreateChildRoot(root, "Model");
+            try
+            {
+                MinecraftResolvedModel model = modelLoader.LoadModel(modelId);
+                if (model.Elements.Count == 0)
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                ApplyBlockModelDisplay(modelRoot, variant, baseScale);
+                if (!TryCreateCombinedResolvedModel(modelRoot, model))
+                {
+                    DestroyUnityObject(modelRoot.gameObject);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                DestroyUnityObject(modelRoot.gameObject);
                 return false;
             }
         }

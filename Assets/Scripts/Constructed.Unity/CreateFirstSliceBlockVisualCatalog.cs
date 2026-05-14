@@ -47,6 +47,9 @@ namespace Constructed.Unity
         private static readonly CreateBlockVisualCatalogEntry[] entries =
         {
             Entry("create:shaft", "Shaft", "axis=x"),
+            Entry("create:cogwheel", "Cogwheel", "axis=y"),
+            Entry("create:large_cogwheel", "Large Cogwheel", "axis=y"),
+            Entry("create:gearbox", "Gearbox", "axis=y"),
             Entry("create:creative_motor", "Creative Motor", "facing=east"),
             Entry("create:creative_crate", "Creative Crate", "facing=down"),
             Entry("create:brass_funnel", "Brass Funnel", "extracting=false", "facing=east", "powered=false", "waterlogged=false"),

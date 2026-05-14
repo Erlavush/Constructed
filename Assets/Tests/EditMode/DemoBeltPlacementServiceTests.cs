@@ -93,7 +93,7 @@ namespace Constructed.Tests
             world.SetBlockState(second, catalog.Shaft.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Y));
 
             Assert.IsTrue(DemoBeltPlacementService.TryCreateConnection(world, catalog, first, second, out _));
-            AssertBeltState(world, catalog, first, DemoBeltPart.Start, DemoBeltSlope.Horizontal, Direction.South);
+            AssertBeltState(world, catalog, first, DemoBeltPart.Start, DemoBeltSlope.Sideways, Direction.South);
             AssertBeltState(world, catalog, middle, DemoBeltPart.Pulley, DemoBeltSlope.Sideways, Direction.South);
             AssertBeltState(world, catalog, second, DemoBeltPart.End, DemoBeltSlope.Sideways, Direction.South);
         }

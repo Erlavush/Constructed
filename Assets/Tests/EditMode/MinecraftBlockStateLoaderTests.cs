@@ -20,6 +20,30 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void CogwheelVariantsResolveToAxisRotatedModels()
+        {
+            MinecraftBlockStateDefinition cogwheel = CreateLoader().LoadBlockState(ResourceLocation.Parse("create:cogwheel"));
+            MinecraftBlockStateDefinition largeCogwheel = CreateLoader().LoadBlockState(ResourceLocation.Parse("create:large_cogwheel"));
+
+            AssertVariant(cogwheel, "axis=x", "create:block/cogwheel", 90, 90);
+            AssertVariant(cogwheel, "axis=y", "create:block/cogwheel", 0, 0);
+            AssertVariant(cogwheel, "axis=z", "create:block/cogwheel", 90, 180);
+            AssertVariant(largeCogwheel, "axis=x", "create:block/large_cogwheel", 90, 90);
+            AssertVariant(largeCogwheel, "axis=y", "create:block/large_cogwheel", 0, 0);
+            AssertVariant(largeCogwheel, "axis=z", "create:block/large_cogwheel", 90, 180);
+        }
+
+        [Test]
+        public void GearboxVariantsResolveWithSourceUvLockFlag()
+        {
+            MinecraftBlockStateDefinition definition = CreateLoader().LoadBlockState(ResourceLocation.Parse("create:gearbox"));
+
+            AssertVariant(definition, "axis=x", "create:block/gearbox/block", 90, 90, true);
+            AssertVariant(definition, "axis=y", "create:block/gearbox/block", 0, 0, true);
+            AssertVariant(definition, "axis=z", "create:block/gearbox/block", 90, 180, true);
+        }
+
+        [Test]
         public void CreativeMotorVariantsResolveHorizontalAndVerticalModels()
         {
             MinecraftBlockStateDefinition definition = CreateLoader().LoadBlockState(ResourceLocation.Parse("create:creative_motor"));
@@ -98,13 +122,15 @@ namespace Constructed.Tests
             string variantProperties,
             string expectedModel,
             int expectedXRotation,
-            int expectedYRotation)
+            int expectedYRotation,
+            bool expectedUvLock = false)
         {
             MinecraftBlockStateVariant variant = definition.ResolveVariant(ParseProperties(variantProperties));
 
             Assert.AreEqual(ResourceLocation.Parse(expectedModel), variant.ModelId);
             Assert.AreEqual(expectedXRotation, variant.XRotationDegrees);
             Assert.AreEqual(expectedYRotation, variant.YRotationDegrees);
+            Assert.AreEqual(expectedUvLock, variant.UvLock);
         }
 
         private static BlockStatePropertyValue[] ParseProperties(string properties)

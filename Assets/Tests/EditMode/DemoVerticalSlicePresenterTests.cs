@@ -1,6 +1,7 @@
 using Constructed.Unity;
 using Constructed.Create;
 using Constructed.Core;
+using Constructed.Minecraft;
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Reflection;
@@ -30,6 +31,8 @@ namespace Constructed.Tests
                 Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
                 Assert.AreEqual(1, presenter.GeneratedAnimatedMotorOutputCount);
                 Assert.AreEqual(2, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedCogwheelCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedGearboxShaftCount);
                 Assert.AreEqual(0, presenter.GeneratedAnimatedBeltSegmentCount);
                 Assert.AreEqual(CreateFirstSlicePrivateAssetManifest.Manifest.UniqueFiles.Count, presenter.SyncedCreateAssetFileCount + presenter.MissingCreateAssetFileCount);
                 Assert.AreEqual(1, presenterObject.transform.childCount);
@@ -214,6 +217,9 @@ namespace Constructed.Tests
             AssertCullRule(method, catalog, catalog.ItemVault.DefaultState, true);
             AssertCullRule(method, catalog, catalog.CreativeMotor.DefaultState, false);
             AssertCullRule(method, catalog, catalog.Shaft.DefaultState, false);
+            AssertCullRule(method, catalog, catalog.Cogwheel.DefaultState, false);
+            AssertCullRule(method, catalog, catalog.LargeCogwheel.DefaultState, false);
+            AssertCullRule(method, catalog, catalog.Gearbox.DefaultState, false);
             AssertCullRule(method, catalog, catalog.Belt.DefaultState, false);
             AssertCullRule(method, catalog, catalog.BrassFunnel.DefaultState, false);
             AssertCullRule(method, catalog, catalog.Air.DefaultState, false);
@@ -235,6 +241,8 @@ namespace Constructed.Tests
                 Assert.AreEqual(1, presenter.GeneratedStateDrivenWorldBlockCount);
                 Assert.AreEqual(0, presenter.GeneratedAnimatedMotorOutputCount);
                 Assert.AreEqual(0, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedCogwheelCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedGearboxShaftCount);
                 Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
             }
             finally
@@ -301,6 +309,8 @@ namespace Constructed.Tests
                 Assert.AreEqual(3, presenter.GeneratedAnimatedBeltSegmentCount);
                 Assert.AreEqual(1, presenter.GeneratedAnimatedMotorOutputCount);
                 Assert.AreEqual(0, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedCogwheelCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedGearboxShaftCount);
                 Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
 
                 MeshRenderer[] renderers = presenterObject.GetComponentsInChildren<MeshRenderer>(true);
@@ -320,6 +330,59 @@ namespace Constructed.Tests
 
                 Assert.GreaterOrEqual(animatedBeltMaterialCount, 2);
                 Assert.AreEqual(2, CountTransformsByName(presenterObject, "Pulley Shaft Spin"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(presenterObject);
+                DestroyIfFound("Main Camera");
+                DestroyIfFound(DemoMinecraftFirstPersonController.PlayerRootName);
+                DestroyIfFound("Directional Light");
+            }
+        }
+
+        [Test]
+        public void PresenterBuildsAnimatedCogwheelsAndGearboxHalfShafts()
+        {
+            GameObject presenterObject = new GameObject("Presenter Cogwheel Gearbox Render Test");
+            try
+            {
+                DemoVerticalSlicePresenter presenter = presenterObject.AddComponent<DemoVerticalSlicePresenter>();
+                presenter.Rebuild();
+
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.CreativeMotorPosition));
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.FirstShaftPosition));
+                Assert.IsTrue(presenter.TryRemoveBlock(DemoVerticalSliceBootstrap.SecondShaftPosition));
+
+                DemoContentCatalog catalog = presenter.Catalog;
+                BlockPos motorPos = new BlockPos(0, DemoVerticalSliceBootstrap.MachineY, 0);
+                BlockPos largeCogPos = motorPos.Relative(Direction.East);
+                BlockPos smallCogPos = largeCogPos.Relative(Direction.Up).Relative(Direction.South);
+                BlockPos gearboxPos = largeCogPos.Relative(Direction.East);
+
+                presenter.World.SetBlockState(
+                    motorPos,
+                    catalog.CreativeMotor.DefaultState.With(DemoContentCatalog.FacingProperty, Direction.East));
+                presenter.World.SetBlockState(
+                    largeCogPos,
+                    catalog.LargeCogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+                presenter.World.SetBlockState(
+                    smallCogPos,
+                    catalog.Cogwheel.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.X));
+                presenter.World.SetBlockState(
+                    gearboxPos,
+                    catalog.Gearbox.DefaultState.With(DemoContentCatalog.AxisProperty, Axis.Y));
+
+                presenter.Rebuild();
+
+                Assert.AreEqual(1, presenter.GeneratedAnimatedMotorOutputCount);
+                Assert.AreEqual(0, presenter.GeneratedAnimatedShaftCount);
+                Assert.AreEqual(2, presenter.GeneratedAnimatedCogwheelCount);
+                Assert.AreEqual(4, presenter.GeneratedAnimatedGearboxShaftCount);
+                Assert.AreEqual(0, presenter.FailedStateDrivenWorldBlockCount);
+                Assert.AreEqual(1, CountTransformsByName(presenterObject, "Cogwheel Spin"));
+                Assert.AreEqual(1, CountTransformsByName(presenterObject, "Large Cogwheel Gear Spin"));
+                Assert.AreEqual(1, CountTransformsByName(presenterObject, "Large Cogwheel Shaft Spin"));
+                Assert.AreEqual(4, CountTransformsByNamePrefix(presenterObject, "Gearbox Shaft "));
             }
             finally
             {
@@ -381,6 +444,19 @@ namespace Constructed.Tests
             foreach (Transform transform in transforms)
             {
                 if (transform != null && transform.name == name)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static int CountTransformsByNamePrefix(GameObject root, string prefix)
+        {
+            int count = 0;
+            Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
+            foreach (Transform transform in transforms)
+            {
+                if (transform != null && transform.name.StartsWith(prefix))
                     count++;
             }
 

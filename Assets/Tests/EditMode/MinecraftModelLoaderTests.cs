@@ -39,6 +39,43 @@ namespace Constructed.Tests
         }
 
         [Test]
+        public void CogwheelItemModelsInheritSourceElementsAndMinecraftParticles()
+        {
+            MinecraftResolvedModel cogwheel = CreateLoader().LoadItemModel(ResourceLocation.Parse("create:cogwheel"));
+            MinecraftResolvedModel largeCogwheel = CreateLoader().LoadItemModel(ResourceLocation.Parse("create:large_cogwheel"));
+
+            Assert.IsFalse(cogwheel.UsesGeneratedItemLayers);
+            Assert.IsTrue(cogwheel.UsesBlockLight);
+            Assert.IsTrue(cogwheel.HasGuiDisplay);
+            AssertVector2Equals(new Vector2(32f, 32f), cogwheel.TextureSize);
+            Assert.AreEqual(7, cogwheel.Elements.Count);
+            AssertResolvedTexture(cogwheel, "1_2", "create:block/cogwheel");
+            AssertResolvedTexture(cogwheel, "particle", "minecraft:block/stripped_spruce_log_top");
+
+            Assert.IsFalse(largeCogwheel.UsesGeneratedItemLayers);
+            Assert.IsTrue(largeCogwheel.UsesBlockLight);
+            Assert.IsTrue(largeCogwheel.HasGuiDisplay);
+            AssertVector2Equals(new Vector2(32f, 32f), largeCogwheel.TextureSize);
+            Assert.AreEqual(16, largeCogwheel.Elements.Count);
+            AssertResolvedTexture(largeCogwheel, "4", "create:block/large_cogwheel");
+            AssertResolvedTexture(largeCogwheel, "particle", "minecraft:block/stripped_spruce_log");
+        }
+
+        [Test]
+        public void GearboxItemModelUsesSourceItemBodyAndAxisTextures()
+        {
+            MinecraftResolvedModel model = CreateLoader().LoadItemModel(ResourceLocation.Parse("create:gearbox"));
+
+            Assert.IsFalse(model.UsesGeneratedItemLayers);
+            Assert.IsTrue(model.UsesBlockLight);
+            Assert.AreEqual(5, model.Elements.Count);
+            AssertResolvedTexture(model, "0", "create:block/andesite_casing");
+            AssertResolvedTexture(model, "1", "create:block/gearbox");
+            AssertResolvedTexture(model, "1_0", "create:block/axis");
+            AssertResolvedTexture(model, "1_1", "create:block/axis_top");
+        }
+
+        [Test]
         public void CreativeMotorItemModelParsesGuiDisplayAndElementRotation()
         {
             MinecraftResolvedModel model = CreateLoader().LoadItemModel(ResourceLocation.Parse("create:creative_motor"));
